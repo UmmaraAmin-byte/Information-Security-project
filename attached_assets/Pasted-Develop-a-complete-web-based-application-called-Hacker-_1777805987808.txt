@@ -1,0 +1,182 @@
+Develop a complete web-based application called “Hacker vs System”, designed as an educational and visually immersive information security project. The application must simulate real-world cybersecurity scenarios, demonstrate vulnerabilities, allow exploitation using security tools, and implement secure fixes.
+
+The website must not look like a basic academic form-based system. Instead, it should have a modern, hacker-style, cybersecurity-themed interface with a professional and engaging user experience.
+
+🔹 Technology Requirements
+Backend: Python using Flask
+Frontend: HTML, CSS, Bootstrap + custom CSS
+Database: SQLite
+Security Testing Tool Integration: Burp Suite
+Cryptography Demonstration Tool: CrypTool
+🔹 UI / UX DESIGN REQUIREMENTS (VERY IMPORTANT)
+
+The interface must follow a cybersecurity / hacker aesthetic:
+
+Dark theme (black / deep gray background)
+Neon accents (green, blue, red)
+Monospace or terminal-style fonts
+Dashboard styled like a security control panel
+Animated elements (glow effects, hover highlights, transitions)
+Visual Concepts:
+Terminal-like panels
+Glowing buttons (e.g., “ACCESS GRANTED”, “BREACH SYSTEM”)
+Status indicators:
+🔴 Vulnerable
+🟢 Secure
+Sections styled like:
+“System Logs”
+“Security Layers”
+“Access Control Matrix”
+
+The UI should feel like:
+
+a hacking simulation dashboard or cybersecurity lab environment
+
+🔹 Core Functional Requirements
+1. Authentication System
+User registration and login
+Session management
+Logout functionality
+2. Role-Based Access Control (RBAC)
+Roles:
+Admin
+User
+Restrictions:
+/dashboard → all users
+/admin → admin only
+Role validation must be enforced
+3. Mode System (Core Feature)
+
+Implement a toggle:
+
+🔴 Insecure Mode (Attack Mode)
+🟢 Secure Mode (Defense Mode)
+
+UI should visually reflect the mode:
+
+Color changes
+Labels like:
+“System Compromised”
+“System Hardened”
+🔹 Security Levels (Gamified System)
+
+Design the application as levels or missions, each representing a vulnerability:
+
+🔓 Level 1: Weak Authentication
+
+Insecure Mode:
+
+Plain text password storage
+
+Secure Mode:
+
+Password hashing (SHA-256 or bcrypt)
+👑 Level 2: Broken Access Control
+
+Insecure Mode:
+
+Role stored in client-side cookies
+
+Secure Mode:
+
+Role stored and verified on server
+🧨 Level 3: Parameter Tampering
+
+Insecure Mode:
+
+No input validation
+
+Secure Mode:
+
+Input validation and restrictions
+🍪 Level 4: Session Hijacking
+
+Insecure Mode:
+
+Weak session handling
+
+Secure Mode:
+
+Secure cookies + expiration
+🔹 Required Routes
+/ → login page
+/register → registration
+/dashboard → main control panel
+/admin → restricted admin panel
+/levels → mission selection interface
+/toggle-mode → switch modes
+🔹 Dashboard Requirements
+
+The dashboard must look like a security operations center (SOC):
+
+Display:
+
+Logged-in user
+Role
+Current system status (secure / compromised)
+Available attack levels
+Logs panel (simulated messages like “Unauthorized access attempt detected”)
+🔹 Burp Suite Integration (Critical)
+
+The application must be designed so that:
+
+Requests can be intercepted using Burp Suite
+Parameters like:
+role
+amount
+session
+can be modified
+
+Behavior:
+
+In insecure mode → attacks succeed
+In secure mode → attacks fail
+🔹 Cryptography Demonstration
+
+Using CrypTool:
+
+Show password hashing concept
+Compare plain vs hashed values
+Optionally demonstrate RSA encryption
+🔹 Database Schema
+
+Users table:
+
+id
+username
+password
+role
+🔹 Code Requirements
+Clean, modular Flask structure
+Separate logic for secure vs insecure modes
+Comments explaining:
+vulnerability
+attack method
+fix
+🔹 Advanced UI Features (Important for High Marks)
+
+Include at least some of the following:
+
+Animated loading screens (“Initializing System…”)
+Fake terminal output logs
+Hover effects with glow
+Interactive buttons like:
+“Exploit Vulnerability”
+“Patch System”
+Status badges (Secure / Breached)
+🔹 Expected Outcome
+
+The final system must:
+
+Look like a real cybersecurity simulation platform
+Demonstrate vulnerabilities visually and practically
+Allow live attack demonstration via Burp Suite
+Show clear difference between insecure and secure implementations
+🔹 Goal
+
+Build a project that is:
+
+technically correct
+visually impressive
+interactive and engaging
+clearly demonstrates cybersecurity concepts

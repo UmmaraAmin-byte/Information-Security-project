@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}REGISTER // Hacker vs System{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="terminal-title">
+        <span class="prompt">root@hvs:~$</span> create_user
+      </div>
+      <h2 class="auth-logo">CREATE AGENT</h2>
+      <p class="auth-sub">REGISTER NEW OPERATOR</p>
+    </div>
+
+    <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }}">
+      <i class="fas {{ 'fa-shield-alt' if secure else 'fa-radiation' }}"></i>
+      {% if secure %}
+        SECURE MODE — Input validated &bull; Password hashed (SHA-256)
+      {% else %}
+        ATTACK MODE — No input validation &bull; Plain text password storage
+      {% endif %}
+    </div>
+
+    {% if error %}
+    <div class="alert-hacker alert-danger-hacker">
+      <i class="fas fa-exclamation-triangle"></i> {{ error }}
+    </div>
+    {% endif %}
+
+    {% if success %}
+    <div class="alert-hacker alert-success-hacker">
+      <i class="fas fa-check-circle"></i> {{ success }}
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('register') }}" class="hacker-form">
+      <div class="form-group-hacker">
+        <label><i class="fas fa-user"></i> USERNAME</label>
+        <input type="text" name="username" class="input-hacker" placeholder="Choose username" required autocomplete="off"/>
+        {% if secure %}
+        <small class="field-hint">3–20 alphanumeric characters</small>
+        {% else %}
+        <small class="field-hint vuln-text">No validation in insecure mode</small>
+        {% endif %}
+      </div>
+      <div class="form-group-hacker">
+        <label><i class="fas fa-key"></i> PASSWORD</label>
+        <input type="password" name="password" class="input-hacker" placeholder="Choose password" required/>
+        {% if secure %}
+        <small class="field-hint">Min. 6 characters — will be hashed</small>
+        {% else %}
+        <small class="field-hint vuln-text">Stored in plain text (insecure!)</small>
+        {% endif %}
+      </div>
+
+      {% if not secure %}
+      <div class="vuln-box">
+        <span class="vuln-label"><i class="fas fa-bug"></i> LEVEL 1 VULNERABILITY: WEAK AUTH</span>
+        <ul class="vuln-list">
+          <li>No input length or format validation</li>
+          <li>Password stored as plain text (conceptually)</li>
+          <li>No brute-force protection</li>
+        </ul>
+        <span class="vuln-label mt-2"><i class="fas fa-shield-alt"></i> FIX (Secure Mode)</span>
+        <ul class="vuln-list">
+          <li>Username: 3–20 alphanumeric chars enforced</li>
+          <li>Password hashed with SHA-256 before storage</li>
+          <li>Minimum password length enforced</li>
+        </ul>
+      </div>
+      {% endif %}
+
+      <button type="submit" class="btn-hacker btn-access">
+        <i class="fas fa-user-plus"></i> DEPLOY AGENT
+      </button>
+    </form>
+
+    <div class="auth-footer">
+      <a href="{{ url_for('login') }}" class="link-hacker">
+        <i class="fas fa-arrow-left"></i> BACK TO LOGIN
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}

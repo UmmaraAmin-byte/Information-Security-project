@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}PARAMETER TAMPER // Hacker vs System{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+  <div class="page-header">
+    <div class="terminal-title">
+      <span class="prompt">root@hvs:~$</span> ./exploit_param.sh
+    </div>
+    <h1 class="page-title">LEVEL 3: PARAMETER TAMPERING</h1>
+    <p class="page-sub">Demonstrate input validation vulnerability</p>
+  </div>
+
+  <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }} mb-3">
+    <i class="fas {{ 'fa-shield-alt' if secure else 'fa-radiation' }}"></i>
+    {% if secure %}
+      SECURE MODE — All inputs are validated server-side (type + range check)
+    {% else %}
+      ATTACK MODE — No input validation. Submit any value to exploit.
+    {% endif %}
+  </div>
+
+  <div class="row g-3">
+    <div class="col-md-6">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-terminal"></i> TRANSACTION TERMINAL</div>
+        <div class="panel-body">
+          <form method="POST" action="{{ url_for('parameter_tamper') }}" class="hacker-form">
+            <div class="form-group-hacker">
+              <label><i class="fas fa-dollar-sign"></i> TRANSACTION AMOUNT</label>
+              <input type="text" name="amount" class="input-hacker" placeholder="Enter amount"
+                     value="{{ request.form.get('amount', '') }}" autocomplete="off"/>
+              {% if not secure %}
+              <small class="vuln-text">Try: -9999 &nbsp;|&nbsp; 999999 &nbsp;|&nbsp; DROP TABLE &nbsp;|&nbsp; ../../etc</small>
+              {% else %}
+              <small class="field-hint">Accepted range: 0 – 10,000</small>
+              {% endif %}
+            </div>
+            <button type="submit" class="btn-hacker {{ 'btn-access' if not secure else 'btn-patch' }}">
+              <i class="fas {{ 'fa-bug' if not secure else 'fa-paper-plane' }}"></i>
+              {{ 'EXPLOIT TRANSACTION' if not secure else 'SEND TRANSACTION' }}
+            </button>
+          </form>
+
+          {% if result %}
+          <div class="result-box result-{{ result.color }} mt-3">
+            <div class="result-status">{{ result.status }}</div>
+            <div class="result-msg">{{ result.msg }}</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-info-circle"></i> VULNERABILITY DETAILS</div>
+        <div class="panel-body">
+          <div class="vuln-box">
+            <span class="vuln-label"><i class="fas fa-bug"></i> INSECURE (Attack Mode)</span>
+            <ul class="vuln-list">
+              <li>No type checking — strings accepted as amounts</li>
+              <li>No range validation — negative/huge values pass</li>
+              <li>Could cause financial fraud or system errors</li>
+              <li>Interceptable with Burp Suite — change amount mid-request</li>
+            </ul>
+            <span class="vuln-label mt-3"><i class="fas fa-shield-alt"></i> SECURE (Defense Mode)</span>
+            <ul class="vuln-list">
+              <li>Input parsed as float — rejects non-numeric</li>
+              <li>Range enforced: 0 ≤ amount ≤ 10,000</li>
+              <li>Validation happens server-side, not client-side</li>
+              <li>All tampered requests logged and blocked</li>
+            </ul>
+          </div>
+          <div class="burp-note mt-3">
+            <i class="fas fa-crosshairs"></i>
+            <span>Use Burp Suite to intercept the POST request and change the <code>amount</code> parameter before it reaches the server.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

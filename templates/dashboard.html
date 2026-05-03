@@ -1,0 +1,222 @@
+{% extends 'base.html' %}
+{% block title %}SOC DASHBOARD // Hacker vs System{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <div class="status-item">
+      <span class="status-dot {{ 'dot-green' if secure else 'dot-red' }}"></span>
+      <span>SYSTEM STATUS: <strong>{{ 'HARDENED' if secure else 'COMPROMISED' }}</strong></span>
+    </div>
+    <div class="status-item">
+      <i class="fas fa-user-shield"></i>
+      OPERATOR: <strong>{{ username }}</strong>
+    </div>
+    <div class="status-item">
+      <i class="fas fa-id-badge"></i>
+      CLEARANCE: <span class="role-tag role-{{ role }}">{{ role|upper }}</span>
+    </div>
+    <div class="status-item">
+      <i class="fas fa-database"></i>
+      AGENTS ONLINE: <strong>{{ users_count }}</strong>
+    </div>
+    <div class="status-item ms-auto">
+      <span class="clock" id="soc-clock">--:--:--</span>
+    </div>
+  </div>
+
+  <!-- Main grid -->
+  <div class="row g-3 mt-1">
+
+    <!-- Security Layers panel -->
+    <div class="col-md-4">
+      <div class="hacker-panel">
+        <div class="panel-header">
+          <i class="fas fa-layer-group"></i> SECURITY LAYERS
+        </div>
+        <div class="panel-body">
+          <div class="layer-item {{ 'layer-secure' if secure else 'layer-vuln' }}">
+            <i class="fas {{ 'fa-lock' if secure else 'fa-unlock' }}"></i>
+            <div>
+              <div class="layer-name">Authentication</div>
+              <div class="layer-desc">{{ 'SHA-256 hashed passwords' if secure else 'Weak / plain-text storage' }}</div>
+            </div>
+            <span class="layer-badge {{ 'badge-secure' if secure else 'badge-vuln' }}">
+              {{ 'SECURE' if secure else 'VULN' }}
+            </span>
+          </div>
+          <div class="layer-item {{ 'layer-secure' if secure else 'layer-vuln' }}">
+            <i class="fas {{ 'fa-server' if secure else 'fa-cookie' }}"></i>
+            <div>
+              <div class="layer-name">Access Control</div>
+              <div class="layer-desc">{{ 'Server-side role validation' if secure else 'Client-side cookie role' }}</div>
+            </div>
+            <span class="layer-badge {{ 'badge-secure' if secure else 'badge-vuln' }}">
+              {{ 'SECURE' if secure else 'VULN' }}
+            </span>
+          </div>
+          <div class="layer-item {{ 'layer-secure' if secure else 'layer-vuln' }}">
+            <i class="fas {{ 'fa-filter' if secure else 'fa-exclamation' }}"></i>
+            <div>
+              <div class="layer-name">Input Validation</div>
+              <div class="layer-desc">{{ 'All inputs sanitized' if secure else 'No parameter validation' }}</div>
+            </div>
+            <span class="layer-badge {{ 'badge-secure' if secure else 'badge-vuln' }}">
+              {{ 'SECURE' if secure else 'VULN' }}
+            </span>
+          </div>
+          <div class="layer-item {{ 'layer-secure' if secure else 'layer-vuln' }}">
+            <i class="fas {{ 'fa-user-lock' if secure else 'fa-ghost' }}"></i>
+            <div>
+              <div class="layer-name">Session Security</div>
+              <div class="layer-desc">{{ 'Secure cookies + expiry' if secure else 'Weak session handling' }}</div>
+            </div>
+            <span class="layer-badge {{ 'badge-secure' if secure else 'badge-vuln' }}">
+              {{ 'SECURE' if secure else 'VULN' }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Access Control Matrix -->
+    <div class="col-md-4">
+      <div class="hacker-panel">
+        <div class="panel-header">
+          <i class="fas fa-table"></i> ACCESS CONTROL MATRIX
+        </div>
+        <div class="panel-body">
+          <table class="acl-table">
+            <thead>
+              <tr><th>RESOURCE</th><th>USER</th><th>ADMIN</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>/dashboard</td>
+                <td><span class="acl-allow">ALLOW</span></td>
+                <td><span class="acl-allow">ALLOW</span></td>
+              </tr>
+              <tr>
+                <td>/admin</td>
+                <td><span class="acl-deny {{ '' if secure else 'acl-warn' }}">{{ 'DENY' if secure else 'BYPASS?' }}</span></td>
+                <td><span class="acl-allow">ALLOW</span></td>
+              </tr>
+              <tr>
+                <td>/levels</td>
+                <td><span class="acl-allow">ALLOW</span></td>
+                <td><span class="acl-allow">ALLOW</span></td>
+              </tr>
+              <tr>
+                <td>/exploit/*</td>
+                <td><span class="acl-allow">ALLOW</span></td>
+                <td><span class="acl-allow">ALLOW</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="mt-3 text-center">
+            <a href="{{ url_for('admin') }}" class="btn-hacker btn-sm-hacker">
+              <i class="fas fa-crown"></i> ATTEMPT ADMIN ACCESS
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick actions -->
+    <div class="col-md-4">
+      <div class="hacker-panel">
+        <div class="panel-header">
+          <i class="fas fa-terminal"></i> ATTACK VECTORS
+        </div>
+        <div class="panel-body">
+          <a href="{{ url_for('levels') }}" class="action-card action-missions">
+            <i class="fas fa-layer-group fa-2x"></i>
+            <div>
+              <div class="action-title">MISSION SELECT</div>
+              <div class="action-sub">4 vulnerability levels</div>
+            </div>
+          </a>
+          <a href="{{ url_for('parameter_tamper') }}" class="action-card action-exploit">
+            <i class="fas fa-code fa-2x"></i>
+            <div>
+              <div class="action-title">PARAMETER TAMPER</div>
+              <div class="action-sub">Level 3 – Input validation</div>
+            </div>
+          </a>
+          <a href="{{ url_for('session_demo') }}" class="action-card action-session">
+            <i class="fas fa-cookie-bite fa-2x"></i>
+            <div>
+              <div class="action-title">SESSION HIJACK</div>
+              <div class="action-sub">Level 4 – Cookie security</div>
+            </div>
+          </a>
+          <form action="{{ url_for('toggle_mode') }}" method="POST">
+            <button type="submit" class="action-card action-toggle w-100">
+              <i class="fas {{ 'fa-lock-open' if secure else 'fa-lock' }} fa-2x"></i>
+              <div>
+                <div class="action-title">{{ 'SWITCH TO ATTACK' if secure else 'PATCH SYSTEM' }}</div>
+                <div class="action-sub">{{ 'Enter insecure mode' if secure else 'Enter secure mode' }}</div>
+              </div>
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Logs -->
+    <div class="col-12">
+      <div class="hacker-panel">
+        <div class="panel-header d-flex justify-content-between align-items-center">
+          <span><i class="fas fa-scroll"></i> SYSTEM LOGS</span>
+          <span class="log-live"><span class="dot-blink"></span> LIVE</span>
+        </div>
+        <div class="panel-body logs-panel" id="logs-panel">
+          {% for log in logs %}
+          <div class="log-entry log-{{ log.level|lower }}">
+            <span class="log-time">{{ log.timestamp }}</span>
+            <span class="log-level">[{{ log.level }}]</span>
+            <span class="log-msg">{{ log.message }}</span>
+          </div>
+          {% else %}
+          <div class="log-entry log-info">
+            <span class="log-msg">No log entries yet.</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateClock() {
+  const el = document.getElementById('soc-clock');
+  if (el) el.textContent = new Date().toLocaleTimeString('en-US', {hour12: false});
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// Auto-refresh logs
+setInterval(() => {
+  fetch('/api/logs')
+    .then(r => r.json())
+    .then(data => {
+      const panel = document.getElementById('logs-panel');
+      if (!panel) return;
+      panel.innerHTML = data.map(l => `
+        <div class="log-entry log-${l.level.toLowerCase()}">
+          <span class="log-time">${l.timestamp}</span>
+          <span class="log-level">[${l.level}]</span>
+          <span class="log-msg">${l.message}</span>
+        </div>
+      `).join('');
+      panel.scrollTop = 0;
+    });
+}, 5000);
+</script>
+{% endblock %}
