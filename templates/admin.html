@@ -5,45 +5,107 @@
 <div class="container-fluid px-4 py-3">
 
   <div class="page-header">
-    <div class="terminal-title">
-      <span class="prompt">root@hvs:~$</span> sudo ./admin_panel
-    </div>
+    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> sudo ./admin_panel --rbac</div>
     <h1 class="page-title">ADMIN CONTROL CENTER</h1>
-    <p class="page-sub">Privileged access granted</p>
+    <p class="page-sub">Hierarchical RBAC — 4-tier role system</p>
   </div>
 
   <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }} mb-3">
     <i class="fas {{ 'fa-shield-alt' if secure else 'fa-radiation' }}"></i>
     {% if secure %}
-      SECURE MODE — Role validated server-side. This access is legitimate.
+      SECURE — Server-side permission check. Role changes CSRF-protected.
     {% else %}
-      ATTACK MODE — Role from cookie. This could be an exploited session!
+      ATTACK MODE — Role verified from client cookie. Privilege escalation possible!
     {% endif %}
   </div>
 
   <div class="row g-3">
-    <div class="col-md-8">
+
+    <!-- Role hierarchy -->
+    <div class="col-md-3">
       <div class="hacker-panel">
-        <div class="panel-header">
-          <i class="fas fa-users-cog"></i> AGENT REGISTRY
-        </div>
+        <div class="panel-header"><i class="fas fa-sitemap"></i> ROLE HIERARCHY</div>
         <div class="panel-body">
+          {% for role_name, level in role_hierarchy.items()|sort(attribute='1', reverse=True) %}
+          <div class="role-hierarchy-item role-h-{{ role_name }}">
+            <div class="role-h-level">LVL {{ level }}</div>
+            <div class="role-h-name">{{ role_name|upper }}</div>
+            <div class="role-h-perms">
+              {% for p in all_roles %}{% endfor %}
+              {{ role_permissions[role_name]|length if role_permissions is defined else '—' }} perms
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Agent registry -->
+    <div class="col-md-9">
+      <div class="hacker-panel">
+        <div class="panel-header d-flex justify-content-between align-items-center">
+          <span><i class="fas fa-users-cog"></i> AGENT REGISTRY</span>
+          <span class="dim" style="font-size:0.7rem">{{ users|length }} agents</span>
+        </div>
+        <div class="panel-body p-0">
           <table class="acl-table w-100">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>USERNAME</th>
-                <th>ROLE</th>
-                <th>STATUS</th>
+                <th>ID</th><th>USERNAME</th><th>ROLE</th>
+                <th>ATTEMPTS</th><th>STATUS</th><th>LAST LOGIN</th><th>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
               {% for user in users %}
+              {% set is_locked = user.locked_until and user.locked_until > now().isoformat() if user.locked_until else False %}
               <tr>
                 <td><code>{{ user.id }}</code></td>
                 <td><i class="fas fa-user me-1"></i>{{ user.username }}</td>
                 <td><span class="role-tag role-{{ user.role }}">{{ user.role|upper }}</span></td>
-                <td><span class="acl-allow">ACTIVE</span></td>
+                <td>
+                  <span class="{{ 'text-danger' if user.failed_attempts >= 3 else '' }}">
+                    {{ user.failed_attempts }}/5
+                  </span>
+                </td>
+                <td>
+                  {% if user.locked_until %}
+                  <span class="acl-deny"><i class="fas fa-ban"></i> LOCKED</span>
+                  {% else %}
+                  <span class="acl-allow"><i class="fas fa-check"></i> ACTIVE</span>
+                  {% endif %}
+                </td>
+                <td style="font-size:0.7rem;color:var(--text-dim)">{{ user.last_login[:16] if user.last_login else 'Never' }}</td>
+                <td>
+                  <div class="d-flex gap-1 flex-wrap">
+                    <!-- Role change -->
+                    <form method="POST" action="{{ url_for('manage_user') }}" class="d-inline">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                      <input type="hidden" name="action" value="change_role"/>
+                      <input type="hidden" name="user_id" value="{{ user.id }}"/>
+                      <select name="role" class="input-hacker input-xs" onchange="this.form.submit()">
+                        {% for r in all_roles %}
+                        <option value="{{ r }}" {{ 'selected' if r == user.role }}>{{ r }}</option>
+                        {% endfor %}
+                      </select>
+                    </form>
+                    <!-- Lock/Unlock -->
+                    <form method="POST" action="{{ url_for('manage_user') }}" class="d-inline">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                      <input type="hidden" name="user_id" value="{{ user.id }}"/>
+                      {% if user.locked_until %}
+                      <input type="hidden" name="action" value="unlock"/>
+                      <button type="submit" class="btn-hacker btn-sm-hacker btn-access" title="Unlock account">
+                        <i class="fas fa-unlock"></i>
+                      </button>
+                      {% else %}
+                      <input type="hidden" name="action" value="lock"/>
+                      <button type="submit" class="btn-hacker btn-sm-hacker btn-danger-hacker" title="Lock account">
+                        <i class="fas fa-ban"></i>
+                      </button>
+                      {% endif %}
+                    </form>
+                  </div>
+                </td>
               </tr>
               {% endfor %}
             </tbody>
@@ -52,24 +114,38 @@
       </div>
     </div>
 
-    <div class="col-md-4">
+    <!-- Privilege escalation demo -->
+    <div class="col-12">
       <div class="hacker-panel">
-        <div class="panel-header"><i class="fas fa-info-circle"></i> LEVEL 2 INFO</div>
+        <div class="panel-header"><i class="fas fa-bug"></i> PRIVILEGE ESCALATION — LEVEL 2 INFO</div>
         <div class="panel-body">
-          <div class="vuln-box">
-            <span class="vuln-label"><i class="fas fa-bug"></i> VULNERABILITY</span>
-            <p class="mt-2">In <strong>Attack Mode</strong>, the role is read from a client-side cookie. An attacker can modify the <code>role</code> cookie to <code>admin</code> to gain unauthorized access.</p>
-            <span class="vuln-label mt-2"><i class="fas fa-shield-alt"></i> FIX</span>
-            <p class="mt-2">In <strong>Secure Mode</strong>, the role is stored exclusively in the server-side session and verified before granting access.</p>
-            <div class="mt-3">
-              <span class="layer-badge {{ 'badge-secure' if secure else 'badge-vuln' }}">
-                {{ 'SERVER-SIDE RBAC ✓' if secure else 'CLIENT-SIDE ROLE ✗' }}
-              </span>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="vuln-box">
+                <span class="vuln-label"><i class="fas fa-skull"></i> ATTACK MODE — Client-Side Role</span>
+                <p class="mt-2">Role is read from the <code>role</code> cookie. An attacker can use browser DevTools or Burp Suite to change the cookie value to <code>admin</code> and bypass access controls entirely.</p>
+                <code class="demo-code">document.cookie = "role=admin"</code>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="secure-box">
+                <span class="secure-label"><i class="fas fa-shield-alt"></i> SECURE MODE — Server-Side Permissions</span>
+                <p class="mt-2">Role is stored in the server-side session only. Each route checks permissions from <code>ROLE_PERMISSIONS</code> map. Cookie tampering has zero effect on authorization.</p>
+                <code class="demo-code">ROLE_PERMISSIONS['admin'] = ['access_admin', ...]</code>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Expose role permissions from server for display
+const rolePermissions = {{ role_permissions | tojson if role_permissions is defined else '{}' }};
+</script>
 {% endblock %}

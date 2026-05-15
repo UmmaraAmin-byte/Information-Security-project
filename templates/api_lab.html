@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+{% block title %}API LAB // Hacker vs System{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+  <div class="page-header">
+    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./api_tester --jwt</div>
+    <h1 class="page-title">LEVEL 8: API SECURITY LAB</h1>
+    <p class="page-sub">JWT authentication &bull; Token-based API &bull; Bearer authorization &bull; Endpoint protection</p>
+  </div>
+
+  <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }} mb-3">
+    <i class="fas {{ 'fa-shield-alt' if secure else 'fa-radiation' }}"></i>
+    {% if secure %}
+      SECURE — JWT bearer tokens required. Endpoints protected by role-based permissions.
+    {% else %}
+      ATTACK MODE — Weak tokens issued. No role validation on endpoints.
+    {% endif %}
+  </div>
+
+  <div class="row g-3">
+
+    <!-- Token issuer -->
+    <div class="col-md-5">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-id-card"></i> TOKEN ISSUER</div>
+        <div class="panel-body">
+          <p style="font-size:0.8rem;color:var(--text-dim);margin-bottom:1rem">
+            Logged in as: <strong>{{ username }}</strong>
+            <span class="role-tag role-{{ role }}">{{ role|upper }}</span>
+          </p>
+          <button class="btn-hacker btn-access w-100" id="btn-get-token">
+            <i class="fas fa-key"></i> GET API TOKEN
+          </button>
+          <div id="token-result" class="mt-3" style="display:none">
+            <div class="dim mb-1" style="font-size:0.7rem">ISSUED TOKEN:</div>
+            <textarea class="input-hacker" id="token-display" rows="4" readonly
+                      style="font-size:0.65rem;word-break:break-all"></textarea>
+            <div id="token-meta" class="dim mt-1" style="font-size:0.7rem"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- API tester -->
+    <div class="col-md-7">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-plug"></i> API ENDPOINT TESTER</div>
+        <div class="panel-body">
+          <div class="api-endpoint-list mb-3">
+            <div class="api-ep" onclick="callAPI('/api/protected', 'GET')">
+              <span class="api-method get">GET</span>
+              <span class="api-path">/api/protected</span>
+              <span class="api-desc dim">JWT-protected endpoint</span>
+            </div>
+            <div class="api-ep" onclick="callAPI('/api/stats', 'GET')">
+              <span class="api-method get">GET</span>
+              <span class="api-path">/api/stats</span>
+              <span class="api-desc dim">System stats (session auth)</span>
+            </div>
+            <div class="api-ep" onclick="callAPI('/api/logs', 'GET')">
+              <span class="api-method get">GET</span>
+              <span class="api-path">/api/logs</span>
+              <span class="api-desc dim">Recent security logs</span>
+            </div>
+            <div class="api-ep" onclick="callAPI('/api/anomalies', 'GET')">
+              <span class="api-method get">GET</span>
+              <span class="api-path">/api/anomalies</span>
+              <span class="api-desc dim">Threat anomaly feed</span>
+            </div>
+          </div>
+
+          <div class="form-group-hacker mb-2">
+            <label><i class="fas fa-link"></i> CUSTOM ENDPOINT</label>
+            <input type="text" id="custom-endpoint" class="input-hacker" value="/api/protected" placeholder="/api/endpoint"/>
+          </div>
+          <div class="form-group-hacker mb-2">
+            <label><i class="fas fa-key"></i> BEARER TOKEN (auto-filled from issuer)</label>
+            <input type="text" id="bearer-token" class="input-hacker" placeholder="Paste JWT token here" style="font-size:0.65rem"/>
+          </div>
+          <button class="btn-hacker btn-patch w-100" onclick="callAPI(document.getElementById('custom-endpoint').value,'GET')">
+            <i class="fas fa-paper-plane"></i> SEND REQUEST
+          </button>
+          <div id="api-response" class="mt-3" style="display:none">
+            <div class="dim mb-1" style="font-size:0.7rem">RESPONSE:</div>
+            <div id="api-status-badge" class="mb-1"></div>
+            <pre class="jwt-pre" id="api-response-body"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- API security explanation -->
+    <div class="col-12">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-info-circle"></i> API SECURITY MODEL</div>
+        <div class="panel-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <div class="concept-card concept-hash">
+                <div class="concept-icon"><i class="fas fa-id-card"></i></div>
+                <div class="concept-title">JWT STRUCTURE</div>
+                <ul class="concept-list">
+                  <li>Header: algorithm type</li>
+                  <li>Payload: claims (user, role, exp)</li>
+                  <li>Signature: HMAC-SHA256</li>
+                  <li>Stateless — no server DB lookup</li>
+                  <li>Expires automatically (1 hour)</li>
+                </ul>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="vuln-box">
+                <span class="vuln-label"><i class="fas fa-skull"></i> INSECURE API PATTERNS</span>
+                <ul class="vuln-list mt-2">
+                  <li>No authentication on endpoints</li>
+                  <li>API keys in query strings</li>
+                  <li>No token expiry</li>
+                  <li>Verbose error messages leak info</li>
+                  <li>No rate limiting</li>
+                  <li>IDOR — direct object reference</li>
+                </ul>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="secure-box">
+                <span class="secure-label"><i class="fas fa-shield-alt"></i> SECURE API PATTERNS</span>
+                <ul class="vuln-list mt-2">
+                  <li>Bearer JWT in Authorization header</li>
+                  <li>Short expiry (1 hour)</li>
+                  <li>Role/permission claims in token</li>
+                  <li>HTTPS only</li>
+                  <li>Rate limiting per token</li>
+                  <li>Minimal error exposure</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let cachedToken = '';
+
+document.getElementById('btn-get-token').addEventListener('click', () => {
+  fetch('/api/token', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      const el = document.getElementById('token-result');
+      el.style.display = '';
+      document.getElementById('token-display').value = data.token || 'Error';
+      document.getElementById('bearer-token').value = data.token || '';
+      cachedToken = data.token || '';
+      const meta = data.expires_in
+        ? `Type: ${data.type || 'Bearer'} | Expires in: ${data.expires_in}s`
+        : (data.note || '');
+      document.getElementById('token-meta').textContent = meta;
+    });
+});
+
+function callAPI(path, method) {
+  const token = document.getElementById('bearer-token').value || cachedToken;
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  fetch(path, { method, headers })
+    .then(r => {
+      const status = r.status;
+      return r.json().then(data => ({ status, data }));
+    })
+    .then(({ status, data }) => {
+      const el = document.getElementById('api-response');
+      el.style.display = '';
+      const badge = document.getElementById('api-status-badge');
+      badge.innerHTML = `<span class="layer-badge ${status < 300 ? 'badge-secure' : 'badge-vuln'}">${status} ${status < 300 ? 'OK' : 'ERROR'}</span>`;
+      document.getElementById('api-response-body').textContent = JSON.stringify(data, null, 2);
+    })
+    .catch(err => {
+      document.getElementById('api-response').style.display = '';
+      document.getElementById('api-response-body').textContent = 'Error: ' + err.message;
+    });
+}
+</script>
+{% endblock %}

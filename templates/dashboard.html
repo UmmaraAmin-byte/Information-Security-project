@@ -8,181 +8,173 @@
   <div class="status-bar">
     <div class="status-item">
       <span class="status-dot {{ 'dot-green' if secure else 'dot-red' }}"></span>
-      <span>SYSTEM STATUS: <strong>{{ 'HARDENED' if secure else 'COMPROMISED' }}</strong></span>
+      SYSTEM: <strong>{{ 'HARDENED' if secure else 'COMPROMISED' }}</strong>
     </div>
     <div class="status-item">
-      <i class="fas fa-user-shield"></i>
-      OPERATOR: <strong>{{ username }}</strong>
+      <i class="fas fa-user-shield"></i> <strong>{{ username }}</strong>
     </div>
     <div class="status-item">
       <i class="fas fa-id-badge"></i>
       CLEARANCE: <span class="role-tag role-{{ role }}">{{ role|upper }}</span>
     </div>
     <div class="status-item">
-      <i class="fas fa-database"></i>
-      AGENTS ONLINE: <strong>{{ users_count }}</strong>
+      <i class="fas fa-database"></i> AGENTS: <strong>{{ users_count }}</strong>
     </div>
+    {% if threat_count > 0 %}
+    <div class="status-item">
+      <span class="threat-indicator"><i class="fas fa-exclamation-triangle"></i> {{ threat_count }} THREATS</span>
+    </div>
+    {% endif %}
     <div class="status-item ms-auto">
       <span class="clock" id="soc-clock">--:--:--</span>
     </div>
   </div>
 
-  <!-- Main grid -->
+  <!-- Threat alert -->
+  {% if threat_count > 0 and secure %}
+  <div class="threat-alert mt-2">
+    <i class="fas fa-radiation"></i>
+    ANOMALY DETECTED — {{ anomalies.suspicious_ips|length }} suspicious IP(s),
+    {{ anomalies.locked_accounts|length }} locked account(s).
+    <a href="{{ url_for('security_dashboard') }}" class="link-hacker ms-2">VIEW DETAILS →</a>
+  </div>
+  {% endif %}
+
   <div class="row g-3 mt-1">
 
-    <!-- Security Layers panel -->
+    <!-- Security Layers -->
     <div class="col-md-4">
       <div class="hacker-panel">
-        <div class="panel-header">
-          <i class="fas fa-layer-group"></i> SECURITY LAYERS
-        </div>
+        <div class="panel-header"><i class="fas fa-layer-group"></i> SECURITY LAYERS</div>
         <div class="panel-body">
+          {% set layers = [
+            ('fa-lock' if secure else 'fa-unlock', 'Authentication', 'bcrypt + lockout + CSRF' if secure else 'Weak / no lockout / no CSRF'),
+            ('fa-server' if secure else 'fa-cookie', 'Access Control', 'Permission-based RBAC (server)' if secure else 'Client-side cookie role'),
+            ('fa-filter' if secure else 'fa-exclamation', 'Input Validation', 'Sanitized + parameterized SQL' if secure else 'No validation (XSS/SQLi)'),
+            ('fa-user-lock' if secure else 'fa-ghost', 'Session Security', 'IP-bound + secure cookies' if secure else 'No IP bind / weak cookies'),
+            ('fa-shield-alt' if secure else 'fa-radiation', 'CSRF Protection', 'Token validated server-side' if secure else 'No CSRF protection'),
+            ('fa-key' if secure else 'fa-unlink', 'API Security', 'JWT bearer tokens' if secure else 'Weak / no token auth')
+          ] %}
+          {% for icon, name, desc in layers %}
           <div class="layer-item {{ 'layer-secure' if secure else 'layer-vuln' }}">
-            <i class="fas {{ 'fa-lock' if secure else 'fa-unlock' }}"></i>
-            <div>
-              <div class="layer-name">Authentication</div>
-              <div class="layer-desc">{{ 'SHA-256 hashed passwords' if secure else 'Weak / plain-text storage' }}</div>
-            </div>
-            <span class="layer-badge {{ 'badge-secure' if secure else 'badge-vuln' }}">
-              {{ 'SECURE' if secure else 'VULN' }}
-            </span>
+            <i class="fas {{ icon }}"></i>
+            <div><div class="layer-name">{{ name }}</div><div class="layer-desc">{{ desc }}</div></div>
+            <span class="layer-badge {{ 'badge-secure' if secure else 'badge-vuln' }}">{{ 'OK' if secure else 'VULN' }}</span>
           </div>
-          <div class="layer-item {{ 'layer-secure' if secure else 'layer-vuln' }}">
-            <i class="fas {{ 'fa-server' if secure else 'fa-cookie' }}"></i>
-            <div>
-              <div class="layer-name">Access Control</div>
-              <div class="layer-desc">{{ 'Server-side role validation' if secure else 'Client-side cookie role' }}</div>
-            </div>
-            <span class="layer-badge {{ 'badge-secure' if secure else 'badge-vuln' }}">
-              {{ 'SECURE' if secure else 'VULN' }}
-            </span>
-          </div>
-          <div class="layer-item {{ 'layer-secure' if secure else 'layer-vuln' }}">
-            <i class="fas {{ 'fa-filter' if secure else 'fa-exclamation' }}"></i>
-            <div>
-              <div class="layer-name">Input Validation</div>
-              <div class="layer-desc">{{ 'All inputs sanitized' if secure else 'No parameter validation' }}</div>
-            </div>
-            <span class="layer-badge {{ 'badge-secure' if secure else 'badge-vuln' }}">
-              {{ 'SECURE' if secure else 'VULN' }}
-            </span>
-          </div>
-          <div class="layer-item {{ 'layer-secure' if secure else 'layer-vuln' }}">
-            <i class="fas {{ 'fa-user-lock' if secure else 'fa-ghost' }}"></i>
-            <div>
-              <div class="layer-name">Session Security</div>
-              <div class="layer-desc">{{ 'Secure cookies + expiry' if secure else 'Weak session handling' }}</div>
-            </div>
-            <span class="layer-badge {{ 'badge-secure' if secure else 'badge-vuln' }}">
-              {{ 'SECURE' if secure else 'VULN' }}
-            </span>
-          </div>
+          {% endfor %}
         </div>
       </div>
     </div>
 
-    <!-- Access Control Matrix -->
+    <!-- ACL Matrix -->
     <div class="col-md-4">
       <div class="hacker-panel">
-        <div class="panel-header">
-          <i class="fas fa-table"></i> ACCESS CONTROL MATRIX
-        </div>
+        <div class="panel-header"><i class="fas fa-table"></i> PERMISSION MATRIX</div>
         <div class="panel-body">
-          <table class="acl-table">
+          <table class="acl-table w-100">
             <thead>
-              <tr><th>RESOURCE</th><th>USER</th><th>ADMIN</th></tr>
+              <tr><th>PERMISSION</th><th>USER</th><th>MOD</th><th>ADMIN</th></tr>
             </thead>
             <tbody>
+              {% set perm_rows = [
+                ('view_dashboard', True, True, True),
+                ('use_exploits', True, True, True),
+                ('view_logs', False, True, True),
+                ('view_security_dashboard', False, True, True),
+                ('manage_users', False, False, True),
+                ('access_admin', False, False, True),
+                ('access_api', False, False, True),
+              ] %}
+              {% for perm, u, m, a in perm_rows %}
               <tr>
-                <td>/dashboard</td>
-                <td><span class="acl-allow">ALLOW</span></td>
-                <td><span class="acl-allow">ALLOW</span></td>
+                <td style="font-size:0.68rem">{{ perm }}</td>
+                <td><span class="{{ 'acl-allow' if u else 'acl-deny' }}">{{ '✓' if u else '✗' }}</span></td>
+                <td><span class="{{ 'acl-allow' if m else 'acl-deny' }}">{{ '✓' if m else '✗' }}</span></td>
+                <td><span class="{{ 'acl-allow' if a else 'acl-deny' }}">{{ '✓' if a else '✗' }}</span></td>
               </tr>
-              <tr>
-                <td>/admin</td>
-                <td><span class="acl-deny {{ '' if secure else 'acl-warn' }}">{{ 'DENY' if secure else 'BYPASS?' }}</span></td>
-                <td><span class="acl-allow">ALLOW</span></td>
-              </tr>
-              <tr>
-                <td>/levels</td>
-                <td><span class="acl-allow">ALLOW</span></td>
-                <td><span class="acl-allow">ALLOW</span></td>
-              </tr>
-              <tr>
-                <td>/exploit/*</td>
-                <td><span class="acl-allow">ALLOW</span></td>
-                <td><span class="acl-allow">ALLOW</span></td>
-              </tr>
+              {% endfor %}
             </tbody>
           </table>
-          <div class="mt-3 text-center">
-            <a href="{{ url_for('admin') }}" class="btn-hacker btn-sm-hacker">
-              <i class="fas fa-crown"></i> ATTEMPT ADMIN ACCESS
+          <div class="mt-2 text-center">
+            <a href="{{ url_for('rbac_demo') }}" class="btn-hacker btn-sm-hacker btn-patch">
+              <i class="fas fa-sitemap"></i> TEST RBAC
             </a>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Quick actions -->
+    <!-- Attack vectors -->
     <div class="col-md-4">
       <div class="hacker-panel">
-        <div class="panel-header">
-          <i class="fas fa-terminal"></i> ATTACK VECTORS
-        </div>
+        <div class="panel-header"><i class="fas fa-terminal"></i> ATTACK VECTORS</div>
         <div class="panel-body">
           <a href="{{ url_for('levels') }}" class="action-card action-missions">
             <i class="fas fa-layer-group fa-2x"></i>
-            <div>
-              <div class="action-title">MISSION SELECT</div>
-              <div class="action-sub">4 vulnerability levels</div>
-            </div>
+            <div><div class="action-title">MISSION SELECT</div><div class="action-sub">8 vulnerability levels</div></div>
           </a>
-          <a href="{{ url_for('parameter_tamper') }}" class="action-card action-exploit">
+          <a href="{{ url_for('xss_demo') }}" class="action-card action-exploit">
             <i class="fas fa-code fa-2x"></i>
-            <div>
-              <div class="action-title">PARAMETER TAMPER</div>
-              <div class="action-sub">Level 3 – Input validation</div>
-            </div>
+            <div><div class="action-title">XSS ATTACK</div><div class="action-sub">Cross-site scripting demo</div></div>
           </a>
-          <a href="{{ url_for('session_demo') }}" class="action-card action-session">
-            <i class="fas fa-cookie-bite fa-2x"></i>
-            <div>
-              <div class="action-title">SESSION HIJACK</div>
-              <div class="action-sub">Level 4 – Cookie security</div>
-            </div>
+          <a href="{{ url_for('sqli_demo') }}" class="action-card action-sqli">
+            <i class="fas fa-database fa-2x"></i>
+            <div><div class="action-title">SQL INJECTION</div><div class="action-sub">Parameterized vs raw</div></div>
           </a>
-          <form action="{{ url_for('toggle_mode') }}" method="POST">
-            <button type="submit" class="action-card action-toggle w-100">
-              <i class="fas {{ 'fa-lock-open' if secure else 'fa-lock' }} fa-2x"></i>
-              <div>
-                <div class="action-title">{{ 'SWITCH TO ATTACK' if secure else 'PATCH SYSTEM' }}</div>
-                <div class="action-sub">{{ 'Enter insecure mode' if secure else 'Enter secure mode' }}</div>
-              </div>
-            </button>
-          </form>
+          <a href="{{ url_for('csrf_demo') }}" class="action-card action-csrf">
+            <i class="fas fa-exchange-alt fa-2x"></i>
+            <div><div class="action-title">CSRF ATTACK</div><div class="action-sub">Forged request simulation</div></div>
+          </a>
+          <a href="{{ url_for('crypto_lab') }}" class="action-card action-crypto">
+            <i class="fas fa-lock fa-2x"></i>
+            <div><div class="action-title">CRYPTO LAB</div><div class="action-sub">bcrypt, JWT, hashing</div></div>
+          </a>
         </div>
       </div>
     </div>
+
+    <!-- Live threat feed if admin/moderator -->
+    {% if role in ['admin', 'moderator'] and anomalies.suspicious_ips %}
+    <div class="col-md-6">
+      <div class="hacker-panel">
+        <div class="panel-header" style="color:var(--red)"><i class="fas fa-crosshairs"></i> SUSPICIOUS IPs (LAST 15 MIN)</div>
+        <div class="panel-body">
+          {% for item in anomalies.suspicious_ips %}
+          <div class="threat-row">
+            <span class="threat-ip"><i class="fas fa-network-wired"></i> {{ item.ip_address }}</span>
+            <span class="threat-count badge-vuln">{{ item.cnt }} attempts</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
 
     <!-- System Logs -->
     <div class="col-12">
       <div class="hacker-panel">
         <div class="panel-header d-flex justify-content-between align-items-center">
           <span><i class="fas fa-scroll"></i> SYSTEM LOGS</span>
-          <span class="log-live"><span class="dot-blink"></span> LIVE</span>
+          <div class="d-flex align-items-center gap-3">
+            <div class="log-filter-tabs">
+              <button class="log-tab active" onclick="filterLogs('all', this)">ALL</button>
+              <button class="log-tab" onclick="filterLogs('danger', this)">DANGER</button>
+              <button class="log-tab" onclick="filterLogs('warning', this)">WARN</button>
+              <button class="log-tab" onclick="filterLogs('success', this)">SUCCESS</button>
+            </div>
+            <span class="log-live"><span class="dot-blink"></span> LIVE</span>
+          </div>
         </div>
         <div class="panel-body logs-panel" id="logs-panel">
           {% for log in logs %}
-          <div class="log-entry log-{{ log.level|lower }}">
+          <div class="log-entry log-{{ log.level|lower }}" data-level="{{ log.level|lower }}">
             <span class="log-time">{{ log.timestamp }}</span>
+            <span class="log-cat">[{{ log.category }}]</span>
             <span class="log-level">[{{ log.level }}]</span>
             <span class="log-msg">{{ log.message }}</span>
           </div>
           {% else %}
-          <div class="log-entry log-info">
-            <span class="log-msg">No log entries yet.</span>
-          </div>
+          <div class="log-entry log-info"><span class="log-msg">No log entries yet.</span></div>
           {% endfor %}
         </div>
       </div>
@@ -201,7 +193,14 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
-// Auto-refresh logs
+function filterLogs(level, btn) {
+  document.querySelectorAll('.log-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.log-entry').forEach(e => {
+    e.style.display = (level === 'all' || e.dataset.level === level) ? '' : 'none';
+  });
+}
+
 setInterval(() => {
   fetch('/api/logs')
     .then(r => r.json())
@@ -209,13 +208,13 @@ setInterval(() => {
       const panel = document.getElementById('logs-panel');
       if (!panel) return;
       panel.innerHTML = data.map(l => `
-        <div class="log-entry log-${l.level.toLowerCase()}">
+        <div class="log-entry log-${l.level.toLowerCase()}" data-level="${l.level.toLowerCase()}">
           <span class="log-time">${l.timestamp}</span>
+          <span class="log-cat">[${l.category || 'GENERAL'}]</span>
           <span class="log-level">[${l.level}]</span>
           <span class="log-msg">${l.message}</span>
         </div>
       `).join('');
-      panel.scrollTop = 0;
     });
 }, 5000);
 </script>

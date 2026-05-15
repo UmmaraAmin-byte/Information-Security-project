@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+{% block title %}XSS DEMO // Hacker vs System{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+  <div class="page-header">
+    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./xss_inject --test</div>
+    <h1 class="page-title">LEVEL 5: CROSS-SITE SCRIPTING</h1>
+    <p class="page-sub">Reflected XSS &bull; Input sanitization &bull; HTML escaping demo</p>
+  </div>
+
+  <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }} mb-3">
+    <i class="fas {{ 'fa-shield-alt' if secure else 'fa-radiation' }}"></i>
+    {% if secure %}
+      SECURE — User input is HTML-escaped before rendering. Scripts are neutralized.
+    {% else %}
+      ATTACK MODE — Raw HTML rendered directly. Script injection works!
+    {% endif %}
+  </div>
+
+  <div class="row g-3">
+
+    <div class="col-md-6">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-code"></i> XSS INJECTION TERMINAL</div>
+        <div class="panel-body">
+          <form method="POST" action="{{ url_for('xss_demo') }}" class="hacker-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="form-group-hacker">
+              <label><i class="fas fa-comment"></i> USER COMMENT INPUT</label>
+              <textarea name="comment" class="input-hacker" rows="4" placeholder="Enter a comment..."
+                        style="resize:vertical">{{ user_input }}</textarea>
+              {% if not secure %}
+              <small class="vuln-text">Try: &lt;script&gt;alert('XSS!')&lt;/script&gt;</small>
+              {% else %}
+              <small class="field-hint">All HTML entities will be escaped</small>
+              {% endif %}
+            </div>
+            <button type="submit" class="btn-hacker {{ 'btn-level-vuln' if not secure else 'btn-patch' }} w-100">
+              <i class="fas {{ 'fa-bug' if not secure else 'fa-paper-plane' }}"></i>
+              {{ 'INJECT PAYLOAD' if not secure else 'SUBMIT (SANITIZED)' }}
+            </button>
+          </form>
+
+          <!-- XSS payload samples -->
+          <div class="payload-samples mt-3">
+            <div class="dim mb-1" style="font-size:0.7rem">SAMPLE PAYLOADS (click to copy):</div>
+            <code class="payload-chip" onclick="copyPayload(this)">&lt;script&gt;alert('XSS')&lt;/script&gt;</code>
+            <code class="payload-chip" onclick="copyPayload(this)">&lt;img src=x onerror=alert(1)&gt;</code>
+            <code class="payload-chip" onclick="copyPayload(this)">&lt;svg onload=alert(document.cookie)&gt;</code>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-eye"></i> RENDERED OUTPUT</div>
+        <div class="panel-body">
+          {% if result %}
+          <div class="result-box result-{{ result.color }} mb-3">
+            <div class="result-status">{{ result.status }}</div>
+          </div>
+
+          <div class="output-compare">
+            <div class="output-row">
+              <div class="output-label dim">RAW INPUT:</div>
+              <code class="output-val">{{ result.raw }}</code>
+            </div>
+            <div class="output-row mt-2">
+              <div class="output-label dim">RENDERED ({{ 'ESCAPED' if secure else 'RAW HTML' }}):</div>
+              <div class="rendered-output {{ 'rendered-safe' if secure else 'rendered-danger' }}">
+                {% if secure %}
+                  {{ result.rendered }}
+                {% else %}
+                  {{ result.rendered | safe }}
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          {% if not secure and '<script' in result.raw %}
+          <div class="vuln-box mt-3">
+            <span class="vuln-label"><i class="fas fa-skull"></i> SCRIPT EXECUTED!</span>
+            <p style="font-size:0.75rem">In a real app, this script would run in the victim's browser with access to their cookies, session tokens, and DOM.</p>
+          </div>
+          {% endif %}
+
+          {% else %}
+          <div class="no-threat" style="padding:2rem;text-align:center">
+            <i class="fas fa-terminal fa-2x mb-2"></i>
+            <div>Submit a payload to see the output</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- How XSS works -->
+    <div class="col-12">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-info-circle"></i> XSS ATTACK TYPES & DEFENSES</div>
+        <div class="panel-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <div class="info-card">
+                <div class="info-card-title" style="color:var(--red)"><i class="fas fa-bolt"></i> REFLECTED XSS</div>
+                <p>Payload in URL/form, reflected back immediately. No persistence. Used for phishing attacks.</p>
+                <code>&lt;a href="?q=&lt;script&gt;...&lt;/script&gt;"&gt;Click me&lt;/a&gt;</code>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="info-card">
+                <div class="info-card-title" style="color:var(--red)"><i class="fas fa-database"></i> STORED XSS</div>
+                <p>Payload stored in database, executed when any user views the infected content. Most dangerous.</p>
+                <code>Comment: &lt;script&gt;stealCookies()&lt;/script&gt;</code>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="info-card">
+                <div class="info-card-title" style="color:var(--green)"><i class="fas fa-shield-alt"></i> DEFENSES</div>
+                <ul class="concept-list mt-1">
+                  <li>HTML-escape all user output</li>
+                  <li>Content Security Policy (CSP)</li>
+                  <li>HttpOnly cookies (JS can't read)</li>
+                  <li>Input validation & whitelist</li>
+                  <li>Use template auto-escaping</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyPayload(el) {
+  const textarea = document.querySelector('textarea[name="comment"]');
+  if (textarea) {
+    textarea.value = el.textContent;
+    el.style.borderColor = 'var(--green)';
+    setTimeout(() => el.style.borderColor = '', 500);
+  }
+}
+</script>
+{% endblock %}

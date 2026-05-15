@@ -4,16 +4,26 @@
 {% block content %}
 <div class="auth-wrapper">
   <div class="auth-card denied-card">
-    <div class="denied-icon">
-      <i class="fas fa-ban"></i>
-    </div>
+    <div class="denied-icon"><i class="fas fa-ban"></i></div>
     <h2 class="denied-title">ACCESS DENIED</h2>
     <div class="denied-code">403 // FORBIDDEN</div>
     <p class="denied-msg">Insufficient clearance level. This incident has been logged.</p>
 
+    {% if required_permission %}
+    <div class="info-row mt-2">
+      <span class="dim">Required permission:</span> <code>{{ required_permission }}</code>
+    </div>
+    {% endif %}
+    {% if user_role %}
+    <div class="info-row mt-1">
+      <span class="dim">Your role:</span>
+      <span class="role-tag role-{{ user_role }}">{{ user_role|upper }}</span>
+    </div>
+    {% endif %}
+
     <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }} mt-3">
       {% if secure %}
-        <i class="fas fa-shield-alt"></i> SECURE MODE — Role validated server-side. Attack blocked.
+        <i class="fas fa-shield-alt"></i> SECURE MODE — Permission enforced server-side. Cookie tampering has no effect.
       {% else %}
         <i class="fas fa-info-circle"></i> ATTACK MODE — Try modifying your <code>role</code> cookie to <code>admin</code>!
       {% endif %}

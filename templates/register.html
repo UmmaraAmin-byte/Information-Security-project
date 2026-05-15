@@ -3,10 +3,10 @@
 
 {% block content %}
 <div class="auth-wrapper">
-  <div class="auth-card">
+  <div class="auth-card" style="max-width:500px">
     <div class="auth-header">
       <div class="terminal-title">
-        <span class="prompt">root@hvs:~$</span> create_user
+        <span class="prompt">root@hvs:~$</span> create_user --secure
       </div>
       <h2 class="auth-logo">CREATE AGENT</h2>
       <p class="auth-sub">REGISTER NEW OPERATOR</p>
@@ -15,71 +15,111 @@
     <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }}">
       <i class="fas {{ 'fa-shield-alt' if secure else 'fa-radiation' }}"></i>
       {% if secure %}
-        SECURE MODE — Input validated &bull; Password hashed (SHA-256)
+        SECURE — bcrypt hashing &bull; Input validation &bull; Password strength enforcement
       {% else %}
-        ATTACK MODE — No input validation &bull; Plain text password storage
+        ATTACK MODE — No validation &bull; No strength check
       {% endif %}
     </div>
 
     {% if error %}
-    <div class="alert-hacker alert-danger-hacker">
-      <i class="fas fa-exclamation-triangle"></i> {{ error }}
-    </div>
+    <div class="alert-hacker alert-danger-hacker"><i class="fas fa-exclamation-triangle"></i> {{ error }}</div>
     {% endif %}
-
     {% if success %}
-    <div class="alert-hacker alert-success-hacker">
-      <i class="fas fa-check-circle"></i> {{ success }}
-    </div>
+    <div class="alert-hacker alert-success-hacker"><i class="fas fa-check-circle"></i> {{ success }}</div>
     {% endif %}
 
-    <form method="POST" action="{{ url_for('register') }}" class="hacker-form">
+    <form method="POST" action="{{ url_for('register') }}" class="hacker-form" id="reg-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div class="form-group-hacker">
         <label><i class="fas fa-user"></i> USERNAME</label>
-        <input type="text" name="username" class="input-hacker" placeholder="Choose username" required autocomplete="off"/>
+        <input type="text" name="username" id="reg-username" class="input-hacker" placeholder="Choose username" required autocomplete="off"/>
         {% if secure %}
-        <small class="field-hint">3–20 alphanumeric characters</small>
+        <small class="field-hint">3–20 chars, letters/numbers/underscores</small>
         {% else %}
-        <small class="field-hint vuln-text">No validation in insecure mode</small>
+        <small class="vuln-text">No validation in attack mode</small>
         {% endif %}
       </div>
       <div class="form-group-hacker">
         <label><i class="fas fa-key"></i> PASSWORD</label>
-        <input type="password" name="password" class="input-hacker" placeholder="Choose password" required/>
+        <input type="password" name="password" id="reg-password" class="input-hacker" placeholder="Choose password" required autocomplete="new-password"/>
         {% if secure %}
-        <small class="field-hint">Min. 6 characters — will be hashed</small>
+        <div class="strength-meter mt-1">
+          <div class="strength-bar-wrap">
+            <div class="strength-bar" id="strength-bar"></div>
+          </div>
+          <span class="strength-label" id="strength-label">—</span>
+        </div>
+        <div class="strength-hints" id="strength-hints"></div>
         {% else %}
-        <small class="field-hint vuln-text">Stored in plain text (insecure!)</small>
+        <small class="vuln-text">No strength requirement in attack mode</small>
         {% endif %}
       </div>
 
       {% if not secure %}
       <div class="vuln-box">
-        <span class="vuln-label"><i class="fas fa-bug"></i> LEVEL 1 VULNERABILITY: WEAK AUTH</span>
+        <span class="vuln-label"><i class="fas fa-bug"></i> VULNERABILITIES ACTIVE</span>
         <ul class="vuln-list">
-          <li>No input length or format validation</li>
-          <li>Password stored as plain text (conceptually)</li>
-          <li>No brute-force protection</li>
+          <li>No username format validation</li>
+          <li>No password strength enforcement</li>
+          <li>No CSRF protection</li>
         </ul>
-        <span class="vuln-label mt-2"><i class="fas fa-shield-alt"></i> FIX (Secure Mode)</span>
+        <span class="vuln-label mt-2"><i class="fas fa-shield-alt"></i> SECURE MODE FIXES</span>
         <ul class="vuln-list">
-          <li>Username: 3–20 alphanumeric chars enforced</li>
-          <li>Password hashed with SHA-256 before storage</li>
-          <li>Minimum password length enforced</li>
+          <li>bcrypt hashing (adaptive cost factor)</li>
+          <li>Password: 8+ chars, uppercase, number, special</li>
+          <li>CSRF token validated server-side</li>
         </ul>
       </div>
       {% endif %}
 
-      <button type="submit" class="btn-hacker btn-access">
+      <button type="submit" class="btn-hacker btn-access w-100">
         <i class="fas fa-user-plus"></i> DEPLOY AGENT
       </button>
     </form>
 
     <div class="auth-footer">
-      <a href="{{ url_for('login') }}" class="link-hacker">
-        <i class="fas fa-arrow-left"></i> BACK TO LOGIN
-      </a>
+      <a href="{{ url_for('login') }}" class="link-hacker"><i class="fas fa-arrow-left"></i> BACK TO LOGIN</a>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% if secure %}
+<script>
+const pwInput = document.getElementById('reg-password');
+const bar = document.getElementById('strength-bar');
+const label = document.getElementById('strength-label');
+const hints = document.getElementById('strength-hints');
+
+function checkStrength(pw) {
+  let score = 0;
+  const checks = [
+    { ok: pw.length >= 8,              msg: '8+ characters' },
+    { ok: /[A-Z]/.test(pw),            msg: 'Uppercase letter' },
+    { ok: /[0-9]/.test(pw),            msg: 'Number' },
+    { ok: /[^a-zA-Z0-9]/.test(pw),    msg: 'Special character' }
+  ];
+  checks.forEach(c => { if (c.ok) score++; });
+  const labels = ['VERY WEAK','WEAK','MODERATE','STRONG','VERY STRONG'];
+  const colors = ['#ff2244','#ff6622','#ffd700','#00aaff','#00ff88'];
+  const missing = checks.filter(c => !c.ok).map(c => c.msg);
+  return { score, label: labels[score], color: colors[score], missing };
+}
+
+if (pwInput) {
+  pwInput.addEventListener('input', () => {
+    const r = checkStrength(pwInput.value);
+    const pct = (r.score / 4) * 100;
+    bar.style.width = pct + '%';
+    bar.style.background = r.color;
+    label.textContent = r.label;
+    label.style.color = r.color;
+    hints.innerHTML = r.missing.length
+      ? r.missing.map(m => `<span class="hint-chip">✗ ${m}</span>`).join('')
+      : '<span class="hint-chip hint-ok">✓ Strong password</span>';
+  });
+}
+</script>
+{% endif %}
 {% endblock %}

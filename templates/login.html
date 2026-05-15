@@ -10,53 +10,73 @@
         <span class="typing-text" id="typeTarget"> authenticate</span>
       </div>
       <h2 class="auth-logo"><span class="glitch" data-text="HACKER VS SYSTEM">HACKER VS SYSTEM</span></h2>
-      <p class="auth-sub">SECURITY SIMULATION PLATFORM</p>
+      <p class="auth-sub">ADVANCED SECURITY SIMULATION PLATFORM</p>
     </div>
 
-    <!-- Mode warning -->
     <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }}">
       <i class="fas {{ 'fa-shield-alt' if secure else 'fa-radiation' }}"></i>
       {% if secure %}
-        SECURE MODE — Password hashing enabled &bull; Server-side validation
+        SECURE MODE — bcrypt hashing &bull; Account lockout &bull; CSRF protection &bull; IP binding
       {% else %}
-        ATTACK MODE — Weak authentication &bull; Client-side role exploitable
+        ATTACK MODE — No lockout &bull; No CSRF &bull; Client-side role exploitable
       {% endif %}
     </div>
 
-    {% if error %}
+    {% if lockout_remaining %}
+    <div class="alert-hacker alert-lockout-hacker">
+      <i class="fas fa-ban"></i>
+      ACCOUNT LOCKED — Try again in <strong>{{ lockout_remaining }} minute(s)</strong>
+      <div class="lockout-bar-wrap mt-2">
+        <div class="lockout-bar" style="width:{{ [100 - (lockout_remaining / 15 * 100), 5]|max }}%"></div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if error and not lockout_remaining %}
     <div class="alert-hacker alert-danger-hacker">
       <i class="fas fa-exclamation-triangle"></i> {{ error }}
     </div>
     {% endif %}
 
     <form method="POST" action="{{ url_for('login') }}" class="hacker-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div class="form-group-hacker">
         <label><i class="fas fa-user"></i> USERNAME</label>
         <input type="text" name="username" class="input-hacker" placeholder="Enter username" required autocomplete="off"/>
       </div>
       <div class="form-group-hacker">
         <label><i class="fas fa-key"></i> PASSWORD</label>
-        <input type="password" name="password" class="input-hacker" placeholder="Enter password" required/>
+        <input type="password" name="password" class="input-hacker" placeholder="Enter password" required autocomplete="current-password"/>
       </div>
 
       {% if not secure %}
       <div class="vuln-box">
-        <span class="vuln-label"><i class="fas fa-bug"></i> VULNERABILITY DEMO</span>
+        <span class="vuln-label"><i class="fas fa-bug"></i> VULNERABILITY DEMO — CLIENT-SIDE ROLE</span>
         <div class="form-group-hacker mt-2">
-          <label><i class="fas fa-user-tag"></i> ROLE (client-side — tamperable!)</label>
+          <label><i class="fas fa-user-tag"></i> ROLE (tamperable cookie)</label>
           <select name="role" class="input-hacker">
             <option value="user">user</option>
+            <option value="moderator">moderator</option>
             <option value="admin">admin</option>
           </select>
         </div>
-        <small class="vuln-hint">In insecure mode, role is taken from this field — a real vulnerability!</small>
+        <small class="vuln-hint">In attack mode, role is taken from this field — privilege escalation possible!</small>
       </div>
       {% endif %}
 
-      <button type="submit" class="btn-hacker btn-access">
+      <button type="submit" class="btn-hacker btn-access w-100">
         <i class="fas fa-sign-in-alt"></i> ACCESS SYSTEM
       </button>
     </form>
+
+    {% if secure %}
+    <div class="security-features-list">
+      <div class="sec-feature"><i class="fas fa-check-circle text-success"></i> bcrypt password verification</div>
+      <div class="sec-feature"><i class="fas fa-check-circle text-success"></i> Account lockout after {{ 5 }} failed attempts</div>
+      <div class="sec-feature"><i class="fas fa-check-circle text-success"></i> CSRF token validation</div>
+      <div class="sec-feature"><i class="fas fa-check-circle text-success"></i> Session IP binding on login</div>
+    </div>
+    {% endif %}
 
     <div class="auth-footer">
       <a href="{{ url_for('register') }}" class="link-hacker">
@@ -65,7 +85,7 @@
     </div>
 
     <div class="demo-creds">
-      <span class="dim">Demo → admin / admin123 &nbsp;|&nbsp; demo / demo123</span>
+      <span class="dim">admin / admin123 &nbsp;|&nbsp; moderator / mod123 &nbsp;|&nbsp; demo / demo123</span>
     </div>
   </div>
 </div>

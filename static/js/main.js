@@ -16,51 +16,15 @@ function typeText(elementId, text, speed = 80) {
   el.textContent = '';
   let i = 0;
   const timer = setInterval(() => {
-    if (i < text.length) {
-      el.textContent += text[i++];
-    } else {
-      clearInterval(timer);
-    }
+    if (i < text.length) { el.textContent += text[i++]; }
+    else { clearInterval(timer); }
   }, speed);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  typeText('typeTarget', ' authenticate --user');
+  typeText('typeTarget', ' authenticate --secure');
 
-  /* ─── Terminal fake log stream ──────────────────────────── */
-  const fakeMessages = [
-    { msg: 'Port scan detected from 192.168.1.105', level: 'WARNING' },
-    { msg: 'Brute-force attempt blocked on /login', level: 'DANGER'  },
-    { msg: 'SSL certificate verified OK',            level: 'SUCCESS' },
-    { msg: 'Firewall rule updated: DROP 0.0.0.0/0',  level: 'INFO'   },
-    { msg: 'Intrusion detection system online',      level: 'SUCCESS' },
-    { msg: 'Anomalous traffic pattern detected',     level: 'WARNING' },
-    { msg: 'Privilege escalation attempt blocked',   level: 'DANGER'  },
-    { msg: 'Encrypted tunnel established',           level: 'SUCCESS' },
-    { msg: 'Unauthorized access to /admin rejected', level: 'DANGER'  },
-    { msg: 'Security audit log rotation complete',   level: 'INFO'    },
-  ];
-
-  const logsPanel = document.getElementById('logs-panel');
-  if (logsPanel && document.querySelector('.auth-wrapper') === null) {
-    setInterval(() => {
-      const entry = fakeMessages[Math.floor(Math.random() * fakeMessages.length)];
-      const time = new Date().toISOString().replace('T', ' ').split('.')[0];
-      const div = document.createElement('div');
-      div.className = `log-entry log-${entry.level.toLowerCase()}`;
-      div.innerHTML = `
-        <span class="log-time">${time}</span>
-        <span class="log-level">[${entry.level}]</span>
-        <span class="log-msg">${entry.msg}</span>
-      `;
-      logsPanel.insertBefore(div, logsPanel.firstChild);
-      if (logsPanel.children.length > 50) {
-        logsPanel.removeChild(logsPanel.lastChild);
-      }
-    }, 4000);
-  }
-
-  /* ─── Hover glow on buttons ─────────────────────────────── */
+  /* ─── Hover glow on buttons / cards ─────────────────────── */
   document.querySelectorAll('.btn-hacker, .level-card, .action-card').forEach(el => {
     el.addEventListener('mouseenter', () => el.style.transition = 'all 0.2s ease');
   });
@@ -69,6 +33,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.input-hacker').forEach(input => {
     input.addEventListener('focus',  () => input.parentElement.classList.add('focused'));
     input.addEventListener('blur',   () => input.parentElement.classList.remove('focused'));
+  });
+
+  /* ─── Log filter tabs ───────────────────────────────────── */
+  document.querySelectorAll('.log-tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+      document.querySelectorAll('.log-tab').forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+    });
   });
 });
 

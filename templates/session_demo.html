@@ -5,19 +5,17 @@
 <div class="container-fluid px-4 py-3">
 
   <div class="page-header">
-    <div class="terminal-title">
-      <span class="prompt">root@hvs:~$</span> ./session_inspector.sh
-    </div>
+    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./session_inspector.sh</div>
     <h1 class="page-title">LEVEL 4: SESSION HIJACKING</h1>
-    <p class="page-sub">Inspect and exploit session handling</p>
+    <p class="page-sub">Inspect session handling &bull; IP binding &bull; Cookie security flags</p>
   </div>
 
   <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }} mb-3">
     <i class="fas {{ 'fa-shield-alt' if secure else 'fa-radiation' }}"></i>
     {% if secure %}
-      SECURE MODE — HttpOnly, SameSite cookies. Session expires in 30 min.
+      SECURE — HttpOnly, SameSite=Strict, 30-min expiry, IP-bound session
     {% else %}
-      ATTACK MODE — Weak session token, no expiry, interceptable cookies.
+      ATTACK MODE — Weak session token, no expiry, no IP binding, no secure flags
     {% endif %}
   </div>
 
@@ -36,32 +34,40 @@
               <span class="session-val"><span class="role-tag role-{{ info.role }}">{{ info.role|upper }}</span></span>
             </div>
             <div class="session-row">
-              <span class="session-key">Session ID</span>
-              <span class="session-val session-id">{{ info.session_id[:30] }}...</span>
+              <span class="session-key">Session Cookie</span>
+              <span class="session-val session-id">{{ info.session_id[:30] if info.session_id != 'N/A' else 'N/A' }}...</span>
             </div>
             <div class="session-row">
-              <span class="session-key">Mode</span>
+              <span class="session-key">Bound IP</span>
               <span class="session-val {{ 'text-success' if secure else 'text-danger' }}">
-                {{ 'SECURE' if secure else 'INSECURE' }}
+                {{ info.bound_ip if secure else 'Not bound ✗' }}
+              </span>
+            </div>
+            <div class="session-row">
+              <span class="session-key">Current IP</span>
+              <span class="session-val">{{ info.current_ip }}</span>
+            </div>
+            <div class="session-row">
+              <span class="session-key">IP Match</span>
+              <span class="session-val {{ 'text-success' if info.bound_ip == info.current_ip else 'text-danger' }}">
+                {% if secure %}
+                  {{ '✓ Match — session valid' if info.bound_ip == info.current_ip else '✗ Mismatch — session invalidated!' }}
+                {% else %}
+                  Not checked ✗
+                {% endif %}
               </span>
             </div>
             <div class="session-row">
               <span class="session-key">HttpOnly</span>
-              <span class="session-val {{ 'text-success' if secure else 'text-danger' }}">
-                {{ 'YES ✓' if secure else 'NO ✗' }}
-              </span>
+              <span class="session-val {{ 'text-success' if secure else 'text-danger' }}">{{ 'YES ✓' if secure else 'NO ✗' }}</span>
             </div>
             <div class="session-row">
               <span class="session-key">SameSite</span>
-              <span class="session-val {{ 'text-success' if secure else 'text-danger' }}">
-                {{ 'Strict ✓' if secure else 'None ✗' }}
-              </span>
+              <span class="session-val {{ 'text-success' if secure else 'text-danger' }}">{{ 'Strict ✓' if secure else 'None ✗' }}</span>
             </div>
             <div class="session-row">
               <span class="session-key">Expiry</span>
-              <span class="session-val {{ 'text-success' if secure else 'text-danger' }}">
-                {{ '30 min ✓' if secure else 'No expiry ✗' }}
-              </span>
+              <span class="session-val {{ 'text-success' if secure else 'text-danger' }}">{{ '30 min ✓' if secure else 'No expiry ✗' }}</span>
             </div>
           </div>
         </div>
@@ -75,22 +81,24 @@
           <div class="vuln-box">
             <span class="vuln-label"><i class="fas fa-bug"></i> INSECURE (Attack Mode)</span>
             <ul class="vuln-list">
-              <li>Session cookie lacks HttpOnly flag — readable by JS</li>
-              <li>No SameSite restriction — CSRF possible</li>
-              <li>Session never expires — permanent hijack window</li>
-              <li>Predictable session tokens possible</li>
+              <li>No HttpOnly — JavaScript can read session cookie</li>
+              <li>No SameSite — CSRF attacks work</li>
+              <li>No expiry — permanent hijack window</li>
+              <li>No IP binding — token reuse from other IPs</li>
+              <li>Session not cleared on login — fixation risk</li>
             </ul>
             <span class="vuln-label mt-3"><i class="fas fa-shield-alt"></i> SECURE (Defense Mode)</span>
             <ul class="vuln-list">
-              <li>HttpOnly flag prevents JS access to cookie</li>
-              <li>SameSite=Strict blocks CSRF attacks</li>
-              <li>Session expires after 30 minutes</li>
-              <li>Cryptographically random session tokens</li>
+              <li>HttpOnly flag — JS cannot access cookie</li>
+              <li>SameSite=Strict — blocks cross-site sends</li>
+              <li>Expires after 30 minutes of inactivity</li>
+              <li>Session bound to login IP address</li>
+              <li>Session.clear() on login (prevents fixation)</li>
             </ul>
           </div>
           <div class="burp-note mt-3">
             <i class="fas fa-crosshairs"></i>
-            <span>Use Burp Suite to intercept requests and inspect/replay the <code>session</code> cookie to demonstrate hijacking.</span>
+            <span>Use Burp Suite to intercept and replay the <code>session</code> cookie to demonstrate hijacking in attack mode.</span>
           </div>
         </div>
       </div>

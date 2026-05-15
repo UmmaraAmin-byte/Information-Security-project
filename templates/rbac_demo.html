@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% block title %}RBAC DEMO // Hacker vs System{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+  <div class="page-header">
+    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./test_rbac --permission-check</div>
+    <h1 class="page-title">LEVEL 2: RBAC EXPLOITATION</h1>
+    <p class="page-sub">Hierarchical roles &bull; Permission-based access &bull; Privilege escalation</p>
+  </div>
+
+  <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }} mb-3">
+    <i class="fas {{ 'fa-shield-alt' if secure else 'fa-radiation' }}"></i>
+    {% if secure %}
+      SECURE — Permissions checked from server-side session. Cookie tampering has no effect.
+    {% else %}
+      ATTACK MODE — Role read from <code>role</code> cookie. Modify cookie to escalate!
+    {% endif %}
+  </div>
+
+  <div class="row g-3">
+
+    <!-- Permission checker -->
+    <div class="col-md-5">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-key"></i> PERMISSION CHECK SIMULATOR</div>
+        <div class="panel-body">
+          <form method="POST" action="{{ url_for('rbac_demo') }}" class="hacker-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="form-group-hacker">
+              <label><i class="fas fa-shield-alt"></i> SELECT PERMISSION TO TEST</label>
+              <select name="permission" class="input-hacker">
+                {% for perm in ['view_dashboard','view_levels','use_exploits','view_logs','view_security_dashboard','manage_users','access_admin','access_api','access_crypto_lab'] %}
+                <option value="{{ perm }}">{{ perm }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <button type="submit" class="btn-hacker {{ 'btn-patch' if secure else 'btn-level-vuln w-100' }}">
+              <i class="fas fa-search"></i> CHECK PERMISSION
+            </button>
+          </form>
+
+          {% if result %}
+          <div class="result-box result-{{ result.color }} mt-3">
+            <div class="result-status">{{ result.status }}</div>
+            <div class="result-msg">
+              Role: <strong>{{ result.role }}</strong><br/>
+              Permission: <code>{{ result.permission }}</code><br/>
+              Source: <em>{{ result.source }}</em>
+            </div>
+          </div>
+          {% endif %}
+
+          {% if not secure %}
+          <div class="vuln-box mt-3">
+            <span class="vuln-label"><i class="fas fa-bug"></i> EXPLOIT THIS</span>
+            <p class="mt-1" style="font-size:0.75rem">Open browser console and run:</p>
+            <code class="demo-code">document.cookie = "role=admin; path=/"</code>
+            <p class="mt-1" style="font-size:0.75rem">Then retry — cookie role used instead of session!</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Role-permission matrix -->
+    <div class="col-md-7">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-table"></i> FULL PERMISSION MATRIX</div>
+        <div class="panel-body">
+          <table class="acl-table w-100">
+            <thead>
+              <tr>
+                <th>PERMISSION</th>
+                {% for rname in ['guest','user','moderator','admin'] %}
+                <th class="text-center">{{ rname|upper }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% set all_perms = ['view_dashboard','view_levels','use_exploits','view_logs','view_security_dashboard','manage_users','manage_roles','access_admin','access_api','access_crypto_lab'] %}
+              {% for perm in all_perms %}
+              <tr>
+                <td style="font-size:0.68rem">{{ perm }}</td>
+                {% for rname in ['guest','user','moderator','admin'] %}
+                <td class="text-center">
+                  {% if perm in role_permissions.get(rname, []) %}
+                  <span class="acl-allow">✓</span>
+                  {% else %}
+                  <span class="acl-deny">✗</span>
+                  {% endif %}
+                </td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Role hierarchy visual -->
+    <div class="col-12">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-sitemap"></i> ROLE HIERARCHY — INHERITANCE MODEL</div>
+        <div class="panel-body">
+          <div class="role-inherit-flow">
+            {% for rname, lvl in [('admin',3),('moderator',2),('user',1),('guest',0)] %}
+            <div class="role-inherit-card role-card-{{ rname }}">
+              <div class="role-card-level">LEVEL {{ lvl }}</div>
+              <div class="role-card-name">{{ rname|upper }}</div>
+              <div class="role-card-perms">
+                {% for p in role_permissions.get(rname, []) %}
+                <span class="perm-chip">{{ p }}</span>
+                {% endfor %}
+              </div>
+            </div>
+            {% if not loop.last %}<div class="role-arrow"><i class="fas fa-arrow-right"></i></div>{% endif %}
+            {% endfor %}
+          </div>
+          <div class="mt-3" style="font-size:0.75rem;color:var(--text-dim)">
+            <i class="fas fa-info-circle"></i>
+            Each role in this system has <strong>explicit permission sets</strong> — higher roles have more permissions, but each role's access is independently defined (not purely inherited). This prevents permission creep.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

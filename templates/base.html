@@ -11,7 +11,6 @@
 </head>
 <body class="{{ 'secure-mode' if secure else 'insecure-mode' }}">
 
-  <!-- Loading overlay -->
   <div id="loading-overlay">
     <div class="loading-content">
       <div class="loading-logo">
@@ -28,35 +27,32 @@
       <a class="navbar-brand brand-logo" href="{{ url_for('dashboard') }}">
         <span class="bracket">[</span> HVS <span class="bracket">]</span>
       </a>
-      <div class="d-flex align-items-center gap-3">
-        <!-- Mode badge -->
+      <div class="d-flex align-items-center gap-3 flex-wrap">
         <span class="mode-badge {{ 'mode-secure' if secure else 'mode-insecure' }}">
           <i class="fas {{ 'fa-shield-alt' if secure else 'fa-skull-crossbones' }}"></i>
           {{ 'SECURE' if secure else 'COMPROMISED' }}
         </span>
-
-        <!-- User info -->
         <span class="nav-user">
           <i class="fas fa-user-circle"></i>
           {{ session.username }}
           <span class="role-tag role-{{ session.role }}">{{ session.role|upper }}</span>
         </span>
-
-        <!-- Nav links -->
         <a class="nav-link-hacker" href="{{ url_for('dashboard') }}"><i class="fas fa-tachometer-alt"></i> SOC</a>
         <a class="nav-link-hacker" href="{{ url_for('levels') }}"><i class="fas fa-layer-group"></i> Missions</a>
+        <a class="nav-link-hacker" href="{{ url_for('crypto_lab') }}"><i class="fas fa-lock"></i> Crypto</a>
+        <a class="nav-link-hacker" href="{{ url_for('api_lab') }}"><i class="fas fa-plug"></i> API</a>
+        {% if session.role in ['admin', 'moderator'] %}
+        <a class="nav-link-hacker" href="{{ url_for('security_dashboard') }}"><i class="fas fa-radar"></i> SecOps</a>
+        {% endif %}
         {% if session.role == 'admin' %}
         <a class="nav-link-hacker" href="{{ url_for('admin') }}"><i class="fas fa-crown"></i> Admin</a>
         {% endif %}
-
-        <!-- Toggle mode -->
         <form action="{{ url_for('toggle_mode') }}" method="POST" class="d-inline">
           <button type="submit" class="btn-toggle {{ 'btn-toggle-secure' if secure else 'btn-toggle-insecure' }}">
             <i class="fas {{ 'fa-lock-open' if secure else 'fa-lock' }}"></i>
             {{ 'SWITCH INSECURE' if secure else 'SWITCH SECURE' }}
           </button>
         </form>
-
         <a href="{{ url_for('logout') }}" class="btn-logout"><i class="fas fa-sign-out-alt"></i></a>
       </div>
     </div>
@@ -67,7 +63,6 @@
     {% block content %}{% endblock %}
   </main>
 
-  <!-- Scanline overlay -->
   <div class="scanlines"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

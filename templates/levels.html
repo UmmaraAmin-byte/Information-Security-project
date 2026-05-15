@@ -5,134 +5,48 @@
 <div class="container-fluid px-4 py-3">
 
   <div class="page-header">
-    <div class="terminal-title">
-      <span class="prompt">root@hvs:~$</span> ./load_missions.sh
-    </div>
+    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./load_missions.sh --advanced</div>
     <h1 class="page-title">MISSION SELECT</h1>
-    <p class="page-sub">Choose a security level to exploit or patch</p>
+    <p class="page-sub">8 security levels — Attack &amp; Defend</p>
   </div>
 
-  <div class="row g-4 mt-2">
+  <div class="row g-4 mt-1">
 
-    <!-- Level 1 -->
+    {% set missions = [
+      ('01', 'fa-key',             'WEAK AUTHENTICATION',     'login',           'bcrypt + lockout + CSRF' if secure else 'No lockout, no CSRF, weak auth',     'Brute force, credential stuffing, dictionary attacks', 'bcrypt + account lockout + CSRF tokens'),
+      ('02', 'fa-crown',           'BROKEN ACCESS CONTROL',   'rbac_demo',       'Permission-based server RBAC' if secure else 'Client cookie role escalation', 'Cookie tamper, privilege escalation', 'Server-side RBAC, permission lists'),
+      ('03', 'fa-code',            'PARAMETER TAMPERING',     'parameter_tamper','Server-side type+range check' if secure else 'No validation on any input',    'Negative amounts, out-of-range, string injection', 'Type enforcement + range validation'),
+      ('04', 'fa-cookie-bite',     'SESSION HIJACKING',       'session_demo',    'IP-bound, HttpOnly, SameSite' if secure else 'Weak session, no expiry',        'Session token theft, fixation, replay', 'Secure flags + IP binding + expiry'),
+      ('05', 'fa-code-branch',     'CROSS-SITE SCRIPTING',    'xss_demo',        'HTML-escaped output (auto)' if secure else 'Raw HTML rendered directly',       'Stored/reflected XSS, cookie theft', 'HTML escaping + CSP headers'),
+      ('06', 'fa-database',        'SQL INJECTION',           'sqli_demo',       'Parameterized queries only' if secure else 'String concat — data exposed',    'Auth bypass, data dump, UNION attacks', 'Parameterized queries + ORMs'),
+      ('07', 'fa-exchange-alt',    'CSRF SIMULATION',         'csrf_demo',       'Token validated server-side' if secure else 'No CSRF check — forged works',  'Cross-site form submission, state changes', 'CSRF tokens + SameSite cookies'),
+      ('08', 'fa-plug',            'API SECURITY',            'api_lab',         'JWT bearer + role checks' if secure else 'Weak token, no validation',         'Unauthenticated endpoints, token replay', 'JWT + short expiry + role claims'),
+    ] %}
+
+    {% for num, icon, title, route, desc, attack, fix in missions %}
     <div class="col-md-6 col-xl-3">
       <div class="level-card {{ 'level-secure' if secure else 'level-vuln' }}">
-        <div class="level-num">LVL 01</div>
-        <div class="level-icon"><i class="fas fa-key"></i></div>
-        <h3 class="level-title">WEAK AUTHENTICATION</h3>
+        <div class="level-num">LVL {{ num }}</div>
+        <div class="level-icon"><i class="fas {{ icon }}"></i></div>
+        <h3 class="level-title">{{ title }}</h3>
         <div class="level-status {{ 'status-secure' if secure else 'status-vuln' }}">
           <i class="fas {{ 'fa-shield-alt' if secure else 'fa-skull' }}"></i>
           {{ 'PATCHED' if secure else 'VULNERABLE' }}
         </div>
-        <div class="level-desc">
-          {% if secure %}
-            Passwords hashed with SHA-256. No plain-text storage.
-          {% else %}
-            Passwords stored in plain text. Easily exposed.
-          {% endif %}
-        </div>
+        <div class="level-desc">{{ desc }}</div>
         <div class="level-vuln-info">
-          <span class="info-label">ATTACK:</span> Credential dumping, dictionary attack<br/>
-          <span class="info-label">FIX:</span> bcrypt / SHA-256 hashing
+          <span class="info-label">ATTACK:</span> {{ attack }}<br/>
+          <span class="info-label">FIX:</span> {{ fix }}
         </div>
         <div class="level-actions">
-          <a href="{{ url_for('login') }}" class="btn-hacker btn-level {{ 'btn-level-secure' if secure else 'btn-level-vuln' }}">
-            <i class="fas {{ 'fa-lock' if secure else 'fa-unlock' }}"></i>
-            {{ 'VIEW SECURE LOGIN' if secure else 'EXPLOIT AUTH' }}
+          <a href="{{ url_for(route) }}" class="btn-hacker btn-level {{ 'btn-level-secure' if secure else 'btn-level-vuln' }}">
+            <i class="fas {{ 'fa-shield-alt' if secure else 'fa-bug' }}"></i>
+            {{ 'TEST DEFENSE' if secure else 'EXPLOIT' }}
           </a>
         </div>
       </div>
     </div>
-
-    <!-- Level 2 -->
-    <div class="col-md-6 col-xl-3">
-      <div class="level-card {{ 'level-secure' if secure else 'level-vuln' }}">
-        <div class="level-num">LVL 02</div>
-        <div class="level-icon"><i class="fas fa-crown"></i></div>
-        <h3 class="level-title">BROKEN ACCESS CONTROL</h3>
-        <div class="level-status {{ 'status-secure' if secure else 'status-vuln' }}">
-          <i class="fas {{ 'fa-shield-alt' if secure else 'fa-skull' }}"></i>
-          {{ 'PATCHED' if secure else 'VULNERABLE' }}
-        </div>
-        <div class="level-desc">
-          {% if secure %}
-            Role verified server-side. Cookie tampering blocked.
-          {% else %}
-            Role stored in cookie. Modify cookie to escalate privileges.
-          {% endif %}
-        </div>
-        <div class="level-vuln-info">
-          <span class="info-label">ATTACK:</span> Cookie/param tampering, privilege escalation<br/>
-          <span class="info-label">FIX:</span> Server-side session role validation
-        </div>
-        <div class="level-actions">
-          <a href="{{ url_for('admin') }}" class="btn-hacker btn-level {{ 'btn-level-secure' if secure else 'btn-level-vuln' }}">
-            <i class="fas {{ 'fa-shield-alt' if secure else 'fa-door-open' }}"></i>
-            {{ 'TEST SECURE RBAC' if secure else 'BREACH ADMIN' }}
-          </a>
-        </div>
-      </div>
-    </div>
-
-    <!-- Level 3 -->
-    <div class="col-md-6 col-xl-3">
-      <div class="level-card {{ 'level-secure' if secure else 'level-vuln' }}">
-        <div class="level-num">LVL 03</div>
-        <div class="level-icon"><i class="fas fa-code"></i></div>
-        <h3 class="level-title">PARAMETER TAMPERING</h3>
-        <div class="level-status {{ 'status-secure' if secure else 'status-vuln' }}">
-          <i class="fas {{ 'fa-shield-alt' if secure else 'fa-skull' }}"></i>
-          {{ 'PATCHED' if secure else 'VULNERABLE' }}
-        </div>
-        <div class="level-desc">
-          {% if secure %}
-            All input validated and range-checked server-side.
-          {% else %}
-            No input validation. Any value accepted as-is.
-          {% endif %}
-        </div>
-        <div class="level-vuln-info">
-          <span class="info-label">ATTACK:</span> Negative amounts, string injection<br/>
-          <span class="info-label">FIX:</span> Type + range validation on all inputs
-        </div>
-        <div class="level-actions">
-          <a href="{{ url_for('parameter_tamper') }}" class="btn-hacker btn-level {{ 'btn-level-secure' if secure else 'btn-level-vuln' }}">
-            <i class="fas {{ 'fa-filter' if secure else 'fa-bug' }}"></i>
-            {{ 'TEST VALIDATION' if secure else 'EXPLOIT PARAM' }}
-          </a>
-        </div>
-      </div>
-    </div>
-
-    <!-- Level 4 -->
-    <div class="col-md-6 col-xl-3">
-      <div class="level-card {{ 'level-secure' if secure else 'level-vuln' }}">
-        <div class="level-num">LVL 04</div>
-        <div class="level-icon"><i class="fas fa-cookie-bite"></i></div>
-        <h3 class="level-title">SESSION HIJACKING</h3>
-        <div class="level-status {{ 'status-secure' if secure else 'status-vuln' }}">
-          <i class="fas {{ 'fa-shield-alt' if secure else 'fa-skull' }}"></i>
-          {{ 'PATCHED' if secure else 'VULNERABLE' }}
-        </div>
-        <div class="level-desc">
-          {% if secure %}
-            HttpOnly + SameSite cookies. Expiry enforced.
-          {% else %}
-            Weak session tokens. No expiry or secure flags.
-          {% endif %}
-        </div>
-        <div class="level-vuln-info">
-          <span class="info-label">ATTACK:</span> Session token theft, fixation<br/>
-          <span class="info-label">FIX:</span> Secure flags, HttpOnly, short expiry
-        </div>
-        <div class="level-actions">
-          <a href="{{ url_for('session_demo') }}" class="btn-hacker btn-level {{ 'btn-level-secure' if secure else 'btn-level-vuln' }}">
-            <i class="fas {{ 'fa-user-lock' if secure else 'fa-ghost' }}"></i>
-            {{ 'VIEW SECURE SESSION' if secure else 'HIJACK SESSION' }}
-          </a>
-        </div>
-      </div>
-    </div>
+    {% endfor %}
 
   </div>
 
@@ -140,41 +54,39 @@
   <div class="callout-panel mt-4">
     <div class="callout-header"><i class="fas fa-bug"></i> BURP SUITE INTEGRATION</div>
     <div class="callout-body">
-      <p>This application is designed to work with <strong>Burp Suite</strong> as an intercepting proxy. In <span class="text-danger">ATTACK MODE</span>, the following parameters can be modified mid-request:</p>
+      <p>This platform is designed to work with <strong>Burp Suite</strong> as an intercepting proxy. In <span class="text-danger">ATTACK MODE</span>, the following parameters can be modified mid-request:</p>
       <div class="param-list">
         <span class="param-tag">role</span>
         <span class="param-tag">amount</span>
         <span class="param-tag">session</span>
+        <span class="param-tag">comment</span>
         <span class="param-tag">username</span>
+        <span class="param-tag">csrf_token</span>
+        <span class="param-tag">Authorization</span>
       </div>
-      <p class="mt-2">Configure your browser to proxy through <code>127.0.0.1:8080</code> and intercept requests to this app to demonstrate live attacks.</p>
+      <p class="mt-2">Configure your browser to proxy through <code>127.0.0.1:8080</code> and intercept requests to demonstrate live attacks across all 8 levels.</p>
     </div>
   </div>
 
   <!-- CrypTool callout -->
   <div class="callout-panel mt-3">
-    <div class="callout-header"><i class="fas fa-lock"></i> CRYPTOGRAPHY DEMONSTRATION</div>
+    <div class="callout-header"><i class="fas fa-lock"></i> CRYPTOGRAPHY DEMONSTRATIONS</div>
     <div class="callout-body">
-      <p>Use <strong>CrypTool</strong> to visualize password hashing. Compare these values:</p>
+      <p>Visit the <a href="{{ url_for('crypto_lab') }}" class="link-hacker">Crypto Lab</a> to compare MD5, SHA-256, SHA-512, and bcrypt on any input. Use <strong>CrypTool</strong> to visualize hash operations externally.</p>
       <div class="crypto-demo">
         <div class="crypto-row">
-          <span class="crypto-label">Plain text:</span>
+          <span class="crypto-label">Plain:</span>
           <code class="crypto-value plain">admin123</code>
         </div>
         <div class="crypto-row">
           <span class="crypto-label">SHA-256:</span>
-          <code class="crypto-value hashed" id="sha256demo">240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9</code>
+          <code class="crypto-value hashed" style="font-size:0.65rem">240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9</code>
         </div>
         <div class="crypto-row">
-          <span class="crypto-label">Plain text:</span>
-          <code class="crypto-value plain">demo123</code>
-        </div>
-        <div class="crypto-row">
-          <span class="crypto-label">SHA-256:</span>
-          <code class="crypto-value hashed">b9c950640e1b3740743e1afc2fa17823e2a0485c7d2a6c17974d2c5ca7dc3b04</code>
+          <span class="crypto-label">bcrypt:</span>
+          <code class="crypto-value hashed" style="font-size:0.65rem">$2b$10$[random salt + hash — changes every time]</code>
         </div>
       </div>
-      <small class="dim mt-2 d-block">Import these values into CrypTool to demonstrate hashing irreversibility.</small>
     </div>
   </div>
 

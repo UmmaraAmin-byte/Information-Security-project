@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% block title %}SQL INJECTION // Hacker vs System{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+  <div class="page-header">
+    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./sqli_exploit --dump-db</div>
+    <h1 class="page-title">LEVEL 6: SQL INJECTION</h1>
+    <p class="page-sub">Raw string queries vs parameterized &bull; Data exfiltration demo</p>
+  </div>
+
+  <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }} mb-3">
+    <i class="fas {{ 'fa-shield-alt' if secure else 'fa-radiation' }}"></i>
+    {% if secure %}
+      SECURE — Parameterized queries used. SQL injection is impossible.
+    {% else %}
+      ATTACK MODE — Raw string concatenation. SQL injection will work!
+    {% endif %}
+  </div>
+
+  <div class="row g-3">
+
+    <div class="col-md-5">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-database"></i> QUERY TERMINAL</div>
+        <div class="panel-body">
+          <form method="POST" action="{{ url_for('sqli_demo') }}" class="hacker-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="form-group-hacker">
+              <label><i class="fas fa-search"></i> USERNAME LOOKUP</label>
+              <input type="text" name="username" class="input-hacker" value="{{ user_input }}"
+                     placeholder="Enter username to lookup" autocomplete="off"/>
+              {% if not secure %}
+              <small class="vuln-text">Try: <code>' OR '1'='1</code> or <code>admin'--</code> or <code>' UNION SELECT id,username,password FROM users--</code></small>
+              {% else %}
+              <small class="field-hint">Input safely parameterized — no injection possible</small>
+              {% endif %}
+            </div>
+            <button type="submit" class="btn-hacker {{ 'btn-level-vuln' if not secure else 'btn-patch' }} w-100">
+              <i class="fas fa-search"></i> EXECUTE QUERY
+            </button>
+          </form>
+
+          {% if not secure %}
+          <div class="payload-samples mt-3">
+            <div class="dim mb-1" style="font-size:0.7rem">INJECTION PAYLOADS:</div>
+            <code class="payload-chip" onclick="fillQuery(this)">' OR '1'='1</code>
+            <code class="payload-chip" onclick="fillQuery(this)">admin'--</code>
+            <code class="payload-chip" onclick="fillQuery(this)">' UNION SELECT id,username,password FROM users--</code>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-7">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-terminal"></i> QUERY RESULT</div>
+        <div class="panel-body">
+          {% if result %}
+          <div class="result-box result-{{ result.color }} mb-3">
+            <div class="result-status">{{ result.status }}</div>
+          </div>
+
+          <div class="query-display mb-3">
+            <div class="dim mb-1" style="font-size:0.7rem">EXECUTED QUERY:</div>
+            <pre class="query-pre {{ 'query-danger' if not secure else 'query-safe' }}">{{ result.query }}</pre>
+          </div>
+
+          <div class="query-note mb-2" style="font-size:0.75rem;color:var(--text-dim)">{{ result.note }}</div>
+
+          {% if result.rows %}
+          <table class="acl-table w-100">
+            <thead>
+              <tr>
+                {% for key in result.rows[0].keys() %}
+                <th>{{ key|upper }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in result.rows %}
+              <tr>
+                {% for val in row.values() %}
+                <td>{{ val }}</td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% if not secure and result.rows|length > 1 %}
+          <div class="vuln-box mt-2">
+            <span class="vuln-label"><i class="fas fa-skull"></i> DATA DUMPED!</span>
+            <p style="font-size:0.75rem">Multiple rows returned via injection — all user records exposed!</p>
+          </div>
+          {% endif %}
+          {% else %}
+          <div class="dim" style="font-size:0.8rem">No rows returned.</div>
+          {% endif %}
+          {% else %}
+          <div class="no-threat" style="padding:2rem;text-align:center">
+            <i class="fas fa-database fa-2x mb-2"></i>
+            <div>Submit a query to see results</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- How SQLi works -->
+    <div class="col-12">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-info-circle"></i> SQL INJECTION EXPLAINED</div>
+        <div class="panel-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="vuln-box">
+                <span class="vuln-label"><i class="fas fa-skull"></i> VULNERABLE CODE</span>
+                <pre class="code-display mt-2">query = "SELECT * FROM users
+WHERE username='" + user_input + "'"
+
+# Input: admin'--
+# Result: SELECT * FROM users
+# WHERE username='admin'--'
+# (-- comments out rest!)</pre>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="secure-box">
+                <span class="secure-label"><i class="fas fa-shield-alt"></i> SECURE CODE</span>
+                <pre class="code-display mt-2">query = "SELECT * FROM users
+WHERE username=?"
+db.execute(query, (user_input,))
+
+# Input: admin'--
+# Treated as literal string
+# No injection possible!</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function fillQuery(el) {
+  const input = document.querySelector('input[name="username"]');
+  if (input) {
+    input.value = el.textContent;
+    el.style.borderColor = 'var(--red)';
+    setTimeout(() => el.style.borderColor = '', 500);
+  }
+}
+</script>
+{% endblock %}

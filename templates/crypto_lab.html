@@ -1,0 +1,216 @@
+{% extends 'base.html' %}
+{% block title %}CRYPTO LAB // Hacker vs System{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+  <div class="page-header">
+    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./cryptolab --analyze</div>
+    <h1 class="page-title">CRYPTOGRAPHY LAB</h1>
+    <p class="page-sub">Hash analysis &bull; Digital signatures &bull; JWT tokens &bull; Encryption vs Hashing</p>
+  </div>
+
+  <!-- Input -->
+  <div class="row g-3 mt-1">
+    <div class="col-12">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-keyboard"></i> INPUT ANALYZER</div>
+        <div class="panel-body">
+          <form method="GET" action="{{ url_for('crypto_lab') }}" class="d-flex gap-2 align-items-end">
+            <div class="form-group-hacker flex-grow-1">
+              <label><i class="fas fa-font"></i> PLAINTEXT INPUT</label>
+              <input type="text" name="sample" class="input-hacker" value="{{ sample }}" placeholder="Enter text to analyze" maxlength="64"/>
+            </div>
+            <button type="submit" class="btn-hacker btn-access">
+              <i class="fas fa-search"></i> ANALYZE
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mt-1">
+
+    <!-- Hash comparison -->
+    <div class="col-md-6">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-fingerprint"></i> HASH ALGORITHM COMPARISON</div>
+        <div class="panel-body">
+          <div class="crypto-algo-row">
+            <div class="algo-header">
+              <span class="algo-name algo-danger">MD5</span>
+              <span class="algo-risk risk-critical">BROKEN — DO NOT USE</span>
+            </div>
+            <div class="algo-desc">128-bit, collision attacks known, rainbow tables available</div>
+            <div class="algo-hash">{{ md5 }}</div>
+            <div class="algo-meta">Length: 32 hex chars &bull; Speed: Very fast (vulnerability)</div>
+          </div>
+
+          <div class="crypto-algo-row mt-2">
+            <div class="algo-header">
+              <span class="algo-name algo-warning">SHA-256</span>
+              <span class="algo-risk risk-medium">ACCEPTABLE (but not for passwords)</span>
+            </div>
+            <div class="algo-desc">256-bit, no known collisions, but fast = GPU brute-forceable</div>
+            <div class="algo-hash">{{ sha256 }}</div>
+            <div class="algo-meta">Length: 64 hex chars &bull; Speed: Fast (bad for passwords)</div>
+          </div>
+
+          <div class="crypto-algo-row mt-2">
+            <div class="algo-header">
+              <span class="algo-name algo-warning">SHA-512</span>
+              <span class="algo-risk risk-medium">ACCEPTABLE (but not for passwords)</span>
+            </div>
+            <div class="algo-desc">512-bit output, stronger than SHA-256 but still fast</div>
+            <div class="algo-hash" style="font-size:0.6rem">{{ sha512 }}</div>
+            <div class="algo-meta">Length: 128 hex chars &bull; Still GPU-acceleratable</div>
+          </div>
+
+          <div class="crypto-algo-row mt-2">
+            <div class="algo-header">
+              <span class="algo-name algo-secure">bcrypt</span>
+              <span class="algo-risk risk-secure">RECOMMENDED for passwords</span>
+            </div>
+            <div class="algo-desc">Adaptive cost factor, built-in salt, GPU-resistant</div>
+            <div class="algo-hash">{{ bcrypt_hash }}</div>
+            <div class="algo-meta">Cost factor: 10 &bull; Built-in salt embedded &bull; Time: ~100ms</div>
+          </div>
+
+          <div class="crypto-comparison-note mt-3">
+            <i class="fas fa-info-circle"></i>
+            <strong>Key principle:</strong> Hashing is one-way (irreversible). Each bcrypt hash of the same input is <em>different</em> due to random salting — yet all verify correctly.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- JWT -->
+    <div class="col-md-6">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-id-card"></i> JWT TOKEN DEMONSTRATION</div>
+        <div class="panel-body">
+          <div class="jwt-explainer">
+            <div class="jwt-part jwt-header-part">
+              <div class="jwt-part-label">HEADER (algorithm)</div>
+              <code class="jwt-part-val">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9</code>
+            </div>
+            <div class="jwt-dot">.</div>
+            <div class="jwt-part jwt-payload-part">
+              <div class="jwt-part-label">PAYLOAD (claims)</div>
+              <code class="jwt-part-val">{{ jwt_token.split('.')[1] if '.' in jwt_token else jwt_token }}</code>
+            </div>
+            <div class="jwt-dot">.</div>
+            <div class="jwt-part jwt-sig-part">
+              <div class="jwt-part-label">SIGNATURE (HMAC-SHA256)</div>
+              <code class="jwt-part-val">{{ jwt_token.split('.')[2] if jwt_token.count('.') >= 2 else '...' }}</code>
+            </div>
+          </div>
+
+          <div class="jwt-payload-display mt-3">
+            <div class="dim mb-1" style="font-size:0.72rem">DECODED PAYLOAD:</div>
+            <pre class="jwt-pre">{{ jwt_payload }}</pre>
+          </div>
+
+          <div class="jwt-notes mt-3">
+            <div class="jwt-note jwt-note-warn">
+              <i class="fas fa-eye"></i> JWT payload is Base64-encoded, <strong>not encrypted</strong> — visible to anyone
+            </div>
+            <div class="jwt-note jwt-note-secure mt-1">
+              <i class="fas fa-shield-alt"></i> Signature verifies integrity — tampering invalidates the token
+            </div>
+            <div class="jwt-note jwt-note-warn mt-1">
+              <i class="fas fa-clock"></i> Contains expiry (<code>exp</code>) — tokens auto-expire in 1 hour
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Encryption vs Hashing -->
+    <div class="col-md-6">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-exchange-alt"></i> ENCRYPTION VS HASHING</div>
+        <div class="panel-body">
+          <div class="row g-2">
+            <div class="col-6">
+              <div class="concept-card concept-hash">
+                <div class="concept-icon"><i class="fas fa-fingerprint"></i></div>
+                <div class="concept-title">HASHING</div>
+                <ul class="concept-list">
+                  <li>One-way — irreversible</li>
+                  <li>Fixed output length</li>
+                  <li>Same input → same hash</li>
+                  <li>Used for: passwords, checksums</li>
+                  <li>bcrypt, SHA-256, Argon2</li>
+                </ul>
+                <div class="concept-example">
+                  <code>password → $2b$10$...</code>
+                </div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="concept-card concept-encrypt">
+                <div class="concept-icon"><i class="fas fa-lock"></i></div>
+                <div class="concept-title">ENCRYPTION</div>
+                <ul class="concept-list">
+                  <li>Two-way — reversible</li>
+                  <li>Variable output length</li>
+                  <li>Requires a key</li>
+                  <li>Used for: data at rest/transit</li>
+                  <li>AES-256, RSA, TLS</li>
+                </ul>
+                <div class="concept-example">
+                  <code>plaintext + key → ciphertext</code>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Digital signature demo -->
+    <div class="col-md-6">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-signature"></i> DIGITAL SIGNATURE CONCEPT</div>
+        <div class="panel-body">
+          <div class="sig-flow">
+            <div class="sig-step">
+              <div class="sig-num">1</div>
+              <div class="sig-detail">
+                <div class="sig-title">HASH THE MESSAGE</div>
+                <div class="sig-desc">SHA-256(<code>"{{ sample }}"</code>)</div>
+                <code class="sig-val">{{ sha256[:32] }}...</code>
+              </div>
+            </div>
+            <div class="sig-arrow"><i class="fas fa-arrow-down"></i></div>
+            <div class="sig-step">
+              <div class="sig-num">2</div>
+              <div class="sig-detail">
+                <div class="sig-title">SIGN WITH PRIVATE KEY</div>
+                <div class="sig-desc">RSA/ECDSA(hash, privateKey)</div>
+                <code class="sig-val">→ digital signature bytes</code>
+              </div>
+            </div>
+            <div class="sig-arrow"><i class="fas fa-arrow-down"></i></div>
+            <div class="sig-step">
+              <div class="sig-num">3</div>
+              <div class="sig-detail">
+                <div class="sig-title">VERIFY WITH PUBLIC KEY</div>
+                <div class="sig-desc">verify(sig, hash, publicKey)</div>
+                <code class="sig-val sig-ok">→ TRUE — message authentic</code>
+              </div>
+            </div>
+          </div>
+          <div class="crypto-comparison-note mt-3">
+            <i class="fas fa-info-circle"></i>
+            Digital signatures prove <strong>authenticity</strong> (who signed it) and <strong>integrity</strong> (not tampered). JWT uses HMAC-SHA256 as a symmetric signature.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

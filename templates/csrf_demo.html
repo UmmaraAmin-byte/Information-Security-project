@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% block title %}CSRF DEMO // Hacker vs System{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+  <div class="page-header">
+    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./csrf_attack --simulate</div>
+    <h1 class="page-title">LEVEL 7: CSRF SIMULATION</h1>
+    <p class="page-sub">Cross-Site Request Forgery &bull; Token validation &bull; Forged request demo</p>
+  </div>
+
+  <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }} mb-3">
+    <i class="fas {{ 'fa-shield-alt' if secure else 'fa-radiation' }}"></i>
+    {% if secure %}
+      SECURE — CSRF token validated server-side. Forged requests are rejected.
+    {% else %}
+      ATTACK MODE — No CSRF validation. Any request (even forged) will be executed!
+    {% endif %}
+  </div>
+
+  <div class="row g-3">
+
+    <!-- Legit request -->
+    <div class="col-md-6">
+      <div class="hacker-panel">
+        <div class="panel-header" style="color:var(--green)"><i class="fas fa-check-circle"></i> LEGITIMATE REQUEST (with CSRF token)</div>
+        <div class="panel-body">
+          <p style="font-size:0.8rem;color:var(--text-dim)">This form submits with the correct CSRF token embedded by the server:</p>
+          <form method="POST" action="{{ url_for('csrf_demo') }}" class="hacker-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input type="hidden" name="action" value="wire_transfer"/>
+            <div class="form-group-hacker">
+              <label><i class="fas fa-dollar-sign"></i> TRANSFER AMOUNT</label>
+              <input type="text" name="amount" class="input-hacker" value="500" placeholder="Amount"/>
+            </div>
+            <button type="submit" class="btn-hacker btn-access w-100">
+              <i class="fas fa-paper-plane"></i> SUBMIT LEGIT REQUEST
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Forged request -->
+    <div class="col-md-6">
+      <div class="hacker-panel">
+        <div class="panel-header" style="color:var(--red)"><i class="fas fa-skull-crossbones"></i> FORGED REQUEST (no/wrong CSRF token)</div>
+        <div class="panel-body">
+          <p style="font-size:0.8rem;color:var(--text-dim)">Simulates a cross-site attack — no valid CSRF token:</p>
+          <form method="POST" action="{{ url_for('csrf_demo') }}" class="hacker-form">
+            <input type="hidden" name="csrf_token" value="FORGED_INVALID_TOKEN_12345"/>
+            <input type="hidden" name="action" value="wire_transfer"/>
+            <div class="form-group-hacker">
+              <label><i class="fas fa-skull"></i> FORGED AMOUNT</label>
+              <input type="text" name="amount" class="input-hacker" value="99999" style="border-color:var(--red)"/>
+            </div>
+            <button type="submit" class="btn-hacker btn-level-vuln w-100">
+              <i class="fas fa-bug"></i> SUBMIT FORGED REQUEST
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    {% if result %}
+    <div class="col-12">
+      <div class="result-box result-{{ result.color }}">
+        <div class="result-status d-flex align-items-center gap-2">
+          <i class="fas {{ 'fa-shield-alt' if not result.attack else 'fa-skull' }}"></i>
+          {{ result.status }}
+        </div>
+        <div class="result-msg">{{ result.msg }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Explanation -->
+    <div class="col-12">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-info-circle"></i> HOW CSRF WORKS</div>
+        <div class="panel-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="vuln-box">
+                <span class="vuln-label"><i class="fas fa-skull"></i> ATTACK SCENARIO</span>
+                <ol class="vuln-list mt-2">
+                  <li>Victim is logged into banking site</li>
+                  <li>Attacker hosts malicious page with hidden form</li>
+                  <li>Victim visits attacker's page</li>
+                  <li>Hidden form auto-submits to banking site</li>
+                  <li>Browser sends victim's session cookie automatically</li>
+                  <li>Bank executes the forged transaction!</li>
+                </ol>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="secure-box">
+                <span class="secure-label"><i class="fas fa-shield-alt"></i> DEFENSE MECHANISM</span>
+                <ol class="vuln-list mt-2">
+                  <li>Server generates unique random token per session</li>
+                  <li>Token embedded in every form as hidden field</li>
+                  <li>On POST, server validates token matches session</li>
+                  <li>Forged requests from other sites lack valid token</li>
+                  <li>Request rejected — no token = no action</li>
+                  <li>Also: SameSite=Strict cookie flag prevents cross-origin sends</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

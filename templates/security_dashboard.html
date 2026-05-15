@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+{% block title %}SECURITY DASHBOARD // Hacker vs System{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+  <div class="page-header">
+    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./secops_monitor --live</div>
+    <h1 class="page-title">SECURITY OPERATIONS CENTER</h1>
+    <p class="page-sub">Real-time threat monitoring &bull; Anomaly detection &bull; Incident tracking</p>
+  </div>
+
+  <!-- Stats row -->
+  <div class="row g-3 mt-1">
+    <div class="col-6 col-md-2">
+      <div class="stat-card stat-success">
+        <div class="stat-num" id="st-logins">{{ stats.total_logins }}</div>
+        <div class="stat-label">Successful Logins</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="stat-card stat-warning">
+        <div class="stat-num">{{ stats.failed_logins }}</div>
+        <div class="stat-label">Failed Logins</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="stat-card stat-danger">
+        <div class="stat-num">{{ stats.locked_accounts }}</div>
+        <div class="stat-label">Locked Accounts</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="stat-card stat-cyan">
+        <div class="stat-num">{{ stats.csrf_blocks }}</div>
+        <div class="stat-label">CSRF Blocks</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="stat-card stat-danger">
+        <div class="stat-num">{{ stats.access_denied }}</div>
+        <div class="stat-label">Access Denied</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="stat-card stat-warning">
+        <div class="stat-num">{{ anomalies.suspicious_ips|length }}</div>
+        <div class="stat-label">Suspicious IPs</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mt-1">
+
+    <!-- Suspicious IPs -->
+    <div class="col-md-4">
+      <div class="hacker-panel">
+        <div class="panel-header" style="color:var(--red)">
+          <i class="fas fa-crosshairs"></i> BRUTE-FORCE DETECTION
+          <span class="ms-auto dim" style="font-size:0.65rem">LAST 15 MIN</span>
+        </div>
+        <div class="panel-body">
+          {% if anomalies.suspicious_ips %}
+          {% for item in anomalies.suspicious_ips %}
+          <div class="threat-row">
+            <div>
+              <div class="threat-ip"><i class="fas fa-network-wired"></i> {{ item.ip_address }}</div>
+              <div class="dim" style="font-size:0.65rem">Source IP</div>
+            </div>
+            <span class="threat-badge">{{ item.cnt }} attempts</span>
+          </div>
+          {% endfor %}
+          {% else %}
+          <div class="no-threat"><i class="fas fa-check-circle"></i> No suspicious IPs detected</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Targeted users -->
+    <div class="col-md-4">
+      <div class="hacker-panel">
+        <div class="panel-header" style="color:var(--yellow)">
+          <i class="fas fa-user-times"></i> TARGETED ACCOUNTS
+        </div>
+        <div class="panel-body">
+          {% if anomalies.targeted_users %}
+          {% for item in anomalies.targeted_users %}
+          <div class="threat-row">
+            <div>
+              <div class="threat-ip"><i class="fas fa-user"></i> {{ item.username }}</div>
+              <div class="dim" style="font-size:0.65rem">Username</div>
+            </div>
+            <span class="threat-badge threat-badge-yellow">{{ item.cnt }} failures</span>
+          </div>
+          {% endfor %}
+          {% else %}
+          <div class="no-threat"><i class="fas fa-check-circle"></i> No targeted accounts</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Locked accounts -->
+    <div class="col-md-4">
+      <div class="hacker-panel">
+        <div class="panel-header" style="color:var(--red)">
+          <i class="fas fa-ban"></i> LOCKED ACCOUNTS
+        </div>
+        <div class="panel-body">
+          {% if anomalies.locked_accounts %}
+          {% for acc in anomalies.locked_accounts %}
+          <div class="threat-row">
+            <div>
+              <div class="threat-ip"><i class="fas fa-user-lock"></i> {{ acc.username }}</div>
+              <div class="dim" style="font-size:0.65rem">Locked until: {{ acc.locked_until[:16] if acc.locked_until else 'N/A' }}</div>
+            </div>
+            <span class="threat-badge">LOCKED</span>
+          </div>
+          {% endfor %}
+          {% else %}
+          <div class="no-threat"><i class="fas fa-check-circle"></i> No accounts locked</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Event categories -->
+    <div class="col-md-4">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-chart-bar"></i> EVENT CATEGORIES</div>
+        <div class="panel-body">
+          {% for row in category_counts %}
+          <div class="cat-bar-row">
+            <span class="cat-label">{{ row.category }}</span>
+            <div class="cat-bar-wrap">
+              <div class="cat-bar" style="width:{{ [row.cnt * 5, 100]|min }}%"></div>
+            </div>
+            <span class="cat-count">{{ row.cnt }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent danger events -->
+    <div class="col-md-8">
+      <div class="hacker-panel">
+        <div class="panel-header d-flex justify-content-between">
+          <span><i class="fas fa-exclamation-triangle"></i> RECENT THREATS & WARNINGS</span>
+          <span class="log-live"><span class="dot-blink"></span> LIVE</span>
+        </div>
+        <div class="panel-body logs-panel" style="height:300px" id="threat-logs">
+          {% for log in recent_danger %}
+          <div class="log-entry log-{{ log.level|lower }}">
+            <span class="log-time">{{ log.timestamp }}</span>
+            <span class="log-cat">[{{ log.category }}]</span>
+            <span class="log-level">[{{ log.level }}]</span>
+            <span class="log-msg">
+              {% if log.ip_address %}<span class="dim">[{{ log.ip_address }}]</span> {% endif %}
+              {{ log.message }}
+            </span>
+          </div>
+          {% else %}
+          <div class="log-entry log-success"><span class="log-msg"><i class="fas fa-check-circle"></i> No threats logged.</span></div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+setInterval(() => {
+  fetch('/api/anomalies')
+    .then(r => r.json())
+    .then(data => {
+      // Update suspicious IPs count in stat cards
+    });
+  fetch('/api/logs')
+    .then(r => r.json())
+    .then(data => {
+      const panel = document.getElementById('threat-logs');
+      if (!panel) return;
+      const threats = data.filter(l => ['DANGER','WARNING'].includes(l.level));
+      panel.innerHTML = threats.slice(0, 50).map(l => `
+        <div class="log-entry log-${l.level.toLowerCase()}">
+          <span class="log-time">${l.timestamp}</span>
+          <span class="log-cat">[${l.category || 'GEN'}]</span>
+          <span class="log-level">[${l.level}]</span>
+          <span class="log-msg">${l.ip_address ? '<span class="dim">['+l.ip_address+']</span> ' : ''}${l.message}</span>
+        </div>
+      `).join('') || '<div class="log-entry log-success"><span class="log-msg">No threats logged.</span></div>';
+    });
+}, 4000);
+</script>
+{% endblock %}
