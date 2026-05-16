@@ -10,3 +10,8 @@ gunicorn
 psycopg2-binary
 pyjwt
 python-docx
+email_validator
+flask
+flask-sqlalchemy
+gunicorn
+psycopg2-binary
