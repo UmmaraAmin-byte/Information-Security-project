@@ -1,0 +1,520 @@
+
+Create a major upgrade for my Flask-based Information Security educational web app called “Hacker vs System”. Keep the EXACT SAME cyber-security visual theme, dark hacker aesthetic, neon colors, layout structure, typography style, cards, animations, navbar style, and overall UI consistency. Do not redesign the project into a different theme. Improve and extend the existing system while keeping the same identity.
+
+The app currently has secure and insecure modes, RBAC, crypto lab, API lab, XSS, SQLi, CSRF, session demos, logging, JWT auth, and dashboards. However, many features are too static or fake. I want the project transformed into a much more interactive and practical cybersecurity simulation platform.
+
+IMPORTANT:
+
+* Do NOT break existing functionality.
+* Reuse current routes/templates where possible.
+* Keep Flask + SQLite architecture.
+* Keep the secure vs insecure mode concept everywhere consistently.
+* Make the app feel like a real security training platform.
+* Every demo page should visibly show what is happening behind the scenes.
+* Add live logs, attack traces, request details, and explanations.
+* The app should feel educational and interactive, not static.
+
+════════════════════════════════════
+CORE IMPROVEMENTS REQUIRED
+════════════════════════════════════
+
+1. ACCOUNT LOCKING CHANGES
+
+---
+
+Currently:
+
+* MAX_FAILED_ATTEMPTS = 5
+
+Change this:
+
+* In SECURE MODE:
+
+  * Lock account after 3 failed attempts instead of 5 for easier demo/testing.
+  * Show remaining attempts visually on login page.
+  * Add red warning banner after each failed attempt.
+  * Add countdown timer for lockout duration.
+  * Show “account locked” event instantly in live logs/security dashboard.
+
+* In INSECURE MODE:
+
+  * No account locking at all.
+  * Add visible educational notice:
+    “In insecure mode, brute force protection is disabled.”
+
+Also:
+
+* Add brute-force simulation button that auto-submits wrong passwords repeatedly for educational demo purposes.
+* Show live attack logs while brute-force happens.
+
+════════════════════════════════════
+
+2. FIX SECURE/INSECURE ROLE SWITCH ISSUE
+
+---
+
+Current bug:
+
+* User logs in as admin in insecure mode.
+* Then toggles to secure mode.
+* Session still keeps admin access even if actual DB role is guest/user.
+
+Fix this properly.
+
+Required behavior:
+
+* When switching from insecure → secure:
+
+  * Revalidate role from database.
+  * Ignore tampered cookie role.
+  * Restore real database role.
+  * If privilege escalation occurred in insecure mode:
+
+    * Force session refresh.
+    * Show warning message:
+      “Privilege escalation detected. Secure mode restored original permissions.”
+    * Log security event.
+
+Also:
+
+* Add live visualization in RBAC demo showing:
+
+  * Cookie role
+  * Session role
+  * Database role
+  * Effective role
+  * Whether tampering succeeded or failed
+
+Make this educational and visual.
+
+════════════════════════════════════
+
+3. FIX API LAB PROTECTED ROUTE
+
+---
+
+Current issue:
+
+* Protected path in insecure API mode always says invalid token.
+
+Fix insecure API flow.
+
+Required behavior:
+
+SECURE MODE:
+
+* Use proper JWT validation.
+* Token expiration.
+* Permission claims.
+* Signature verification.
+* Display decoded JWT payload visually.
+
+INSECURE MODE:
+
+* Allow weak/insecure tokens intentionally.
+* Example:
+
+  * Plain random tokens
+  * Base64-only tokens
+  * No signature verification
+  * Hardcoded bypass tokens
+
+Educational requirement:
+
+* Add toggle to simulate:
+
+  * Missing verification
+  * Expired token accepted
+  * Forged token accepted
+  * Role tampering accepted
+
+Show:
+
+* Raw request headers
+* Token structure
+* Validation steps
+* Why request succeeded or failed
+
+Add live API tester panel inside API lab:
+
+* Enter token
+* Send request
+* See JSON response
+* See validation steps
+* See security analysis
+
+════════════════════════════════════
+
+4. MAKE SESSION HIJACKING A REAL SIMULATION
+
+---
+
+Current session demo is too static.
+
+Transform it into an actual educational simulation.
+
+Requirements:
+
+INSECURE MODE:
+
+* Simulate session fixation/hijacking.
+* Show exposed cookies.
+* Allow “attacker” to reuse session token.
+* Add “steal cookie” simulation.
+* Show:
+
+  * victim session
+  * attacker session
+  * reused session
+  * success result
+
+SECURE MODE:
+
+* Enable:
+
+  * HttpOnly
+  * Secure
+  * SameSite
+  * IP/session binding
+  * Session regeneration after login
+
+If hijack attempted:
+
+* Show:
+  “Session hijacking blocked.”
+* Explain WHY it failed.
+
+Add:
+
+* Session timeline
+* Session creation time
+* Last activity
+* IP changes
+* Session regeneration history
+
+Make it visually interactive.
+
+════════════════════════════════════
+
+5. MASSIVE CRYPTO LAB UPGRADE
+
+---
+
+Current crypto lab only displays hashes statically.
+
+Transform it into a real cryptography playground.
+
+Add:
+
+* Interactive hashing
+* Encryption/decryption demos
+* Caesar cipher
+* AES simulation
+* RSA simulation
+* Password cracking simulation
+* Rainbow table demo
+* Salting visualization
+* Hash comparison
+* JWT decoding
+* Base64 encoding/decoding
+
+For every algorithm:
+
+* Show:
+
+  * input
+  * output
+  * steps
+  * explanation
+  * security strength
+  * vulnerabilities
+
+Example:
+MD5:
+
+* Show why collisions are dangerous.
+* Show insecure warning.
+
+bcrypt:
+
+* Show salting rounds.
+* Show why it is safer.
+
+JWT:
+
+* Show header/payload/signature sections separately.
+
+IMPORTANT:
+Do not make these static text blocks.
+Everything should be generated dynamically from user input.
+
+════════════════════════════════════
+
+6. CSRF SIMULATION MUST SHOW BACKEND BEHAVIOR
+
+---
+
+Currently:
+
+* Secure/insecure mode behavior is hidden.
+
+Improve this heavily.
+
+Add visual sections:
+
+1. Incoming Request
+2. Request Origin
+3. CSRF Token Present?
+4. Session Validation
+5. Server Decision
+6. Final Result
+
+INSECURE MODE:
+
+* Allow forged request.
+* Show why it succeeded.
+
+SECURE MODE:
+
+* Reject invalid token.
+* Show exact validation process.
+
+Add:
+
+* Fake attacker website panel
+* “Send forged request” button
+* Visual attack flow arrows
+* Request packet simulation
+
+Show logs in real time.
+
+════════════════════════════════════
+
+7. ADD LIVE SECURITY EVENT STREAM
+
+---
+
+Add a floating/live monitoring panel.
+
+Show events in real time:
+
+* failed logins
+* successful logins
+* CSRF attacks
+* SQLi attempts
+* XSS payloads
+* privilege escalation
+* token abuse
+* session hijacking
+* brute force attacks
+
+Use:
+
+* colored severity badges
+* timestamps
+* category filters
+
+Make it look like a SOC/security monitoring dashboard.
+
+════════════════════════════════════
+
+8. ADD REAL-TIME ATTACK VISUALIZATION
+
+---
+
+Every exploit page should show:
+
+* Request
+* Input
+* Sanitization process
+* Backend handling
+* Database query
+* Server response
+* Security outcome
+
+Example for SQLi:
+
+* Show raw vulnerable query in insecure mode.
+* Show parameterized query in secure mode.
+* Visual comparison side-by-side.
+
+Example for XSS:
+
+* Show raw HTML rendering.
+* Show escaped rendering.
+* Explain dangerous payload execution.
+
+════════════════════════════════════
+
+9. ADD SECURITY SCORE SYSTEM
+
+---
+
+Create a dynamic “System Security Score”.
+
+Start at 100.
+
+Reduce score for:
+
+* insecure mode
+* failed validations
+* weak passwords
+* brute force attempts
+* insecure cookies
+* weak tokens
+* SQLi success
+* XSS success
+
+Increase score for:
+
+* secure mode protections
+* successful sanitization
+* proper JWT
+* CSRF blocking
+* strong passwords
+
+Display:
+
+* animated meter
+* risk level
+* recommendations
+
+════════════════════════════════════
+
+10. ADD LEARNING MODE
+
+---
+
+Every exploit/demo page should contain:
+
+* “What is happening?”
+* “Why is it dangerous?”
+* “How secure mode prevents it”
+* “Real-world impact”
+* “Industry best practice”
+
+Use collapsible educational panels.
+
+════════════════════════════════════
+
+11. IMPROVE UI CONSISTENCY
+
+---
+
+Keep existing cyberpunk/hacker theme.
+
+Requirements:
+
+* Same color palette
+* Same typography
+* Same dark background
+* Same neon style
+* Same dashboard style
+* Same card styling
+* Same animations
+
+Add:
+
+* smooth transitions
+* glowing status indicators
+* animated attack alerts
+* terminal-style logs
+* loading animations
+* interactive diagrams
+
+Do NOT introduce bright/light themes.
+
+════════════════════════════════════
+
+12. ADD MORE REAL FUNCTIONALITY, LESS STATIC CONTENT
+
+---
+
+This is extremely important.
+
+Replace static/demo behavior with actual working simulations wherever possible.
+
+Examples:
+
+* Actually validate tokens.
+* Actually simulate attacks.
+* Actually show request handling.
+* Actually process sanitization.
+* Actually compare secure vs insecure flows.
+
+Avoid:
+
+* static paragraphs
+* fake outputs
+* hardcoded demo text
+
+Everything should react dynamically to user actions.
+
+════════════════════════════════════
+
+13. ADD OPTIONAL ADVANCED FEATURES IF POSSIBLE
+
+---
+
+If architecture allows, also add:
+
+* rate limiting
+* CSP header demo
+* clickjacking demo
+* password entropy meter
+* packet inspection viewer
+* fake SIEM dashboard
+* attack replay system
+* downloadable security reports
+* audit trail export
+* user activity heatmaps
+
+════════════════════════════════════
+
+TECHNICAL REQUIREMENTS
+════════════════════════════════════
+
+Backend:
+
+* Flask
+* SQLite
+* Keep existing structure
+
+Frontend:
+
+* Preserve current design language
+* Use JS for interactivity/live updates
+* Use AJAX/fetch where useful
+* Use charts/graphs if helpful
+
+Code quality:
+
+* Clean modular code
+* Comment important sections
+* Do not duplicate logic unnecessarily
+
+Security architecture:
+
+* Secure and insecure modes must clearly differ.
+* Educational comparison is the main purpose.
+
+════════════════════════════════════
+
+FINAL GOAL
+════════════════════════════════════
+
+The final project should feel like:
+
+* an interactive cybersecurity lab,
+* a vulnerable vs secure system simulator,
+* and a real educational InfoSec platform,
+
+instead of a mostly static Flask demo site.
+
+The user should be able to:
+
+* attack the insecure system,
+* observe why attacks work,
+* switch to secure mode,
+* observe why attacks fail,
+* and visually understand every security mechanism happening behind the scenes.

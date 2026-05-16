@@ -16,77 +16,196 @@
     <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }}">
       <i class="fas {{ 'fa-shield-alt' if secure else 'fa-radiation' }}"></i>
       {% if secure %}
-        SECURE MODE — bcrypt hashing &bull; Account lockout &bull; CSRF protection &bull; IP binding
+        SECURE MODE — bcrypt &bull; {{ max_attempts }}-attempt lockout &bull; CSRF protection &bull; IP binding
       {% else %}
-        ATTACK MODE — No lockout &bull; No CSRF &bull; Client-side role exploitable
+        ATTACK MODE — No lockout &bull; No CSRF &bull; Role field exploitable &bull; Brute force allowed
       {% endif %}
     </div>
 
+    {% if session.get('escalation_detected') %}
+    <div class="alert-hacker alert-danger-hacker mt-2" style="flex-direction:column;gap:4px">
+      <div style="display:flex;align-items:center;gap:8px"><i class="fas fa-exclamation-triangle"></i> <strong>PRIVILEGE ESCALATION DETECTED</strong></div>
+      <div style="font-size:0.75rem">Secure mode restored your original database role. Session role was tampered in insecure mode.</div>
+    </div>
+    {% endif %}
+
     {% if lockout_remaining %}
-    <div class="alert-hacker alert-lockout-hacker">
-      <i class="fas fa-ban"></i>
-      ACCOUNT LOCKED — Try again in <strong>{{ lockout_remaining }} minute(s)</strong>
-      <div class="lockout-bar-wrap mt-2">
-        <div class="lockout-bar" style="width:{{ [100 - (lockout_remaining / 15 * 100), 5]|max }}%"></div>
+    <div class="alert-hacker alert-lockout-hacker mt-2" id="lockout-banner">
+      <div style="display:flex;align-items:center;gap:8px;width:100%">
+        <i class="fas fa-ban"></i>
+        <div style="flex:1">
+          ACCOUNT LOCKED — <span id="lockout-countdown">{{ lockout_remaining }} min(s)</span> remaining
+          <div class="lockout-bar-wrap mt-2">
+            <div class="lockout-bar" id="lockout-bar" style="width:{{ [100 - (lockout_remaining / 15 * 100), 5]|max }}%"></div>
+          </div>
+        </div>
       </div>
     </div>
     {% endif %}
 
     {% if error and not lockout_remaining %}
-    <div class="alert-hacker alert-danger-hacker">
-      <i class="fas fa-exclamation-triangle"></i> {{ error }}
+    <div class="alert-hacker alert-danger-hacker mt-2">
+      <i class="fas fa-exclamation-triangle"></i>
+      <div>
+        {{ error }}
+        {% if secure and failed_attempts > 0 %}
+        <div class="mt-1">
+          <div class="attempt-meter">
+            {% for i in range(max_attempts) %}
+            <div class="attempt-pip {{ 'pip-used' if i < failed_attempts else 'pip-free' }}"></div>
+            {% endfor %}
+          </div>
+          <div style="font-size:0.68rem;margin-top:3px">
+            {{ failed_attempts }}/{{ max_attempts }} attempts used —
+            <span style="color:var(--yellow)">{{ remaining_attempts }} remaining before lockout</span>
+          </div>
+        </div>
+        {% endif %}
+      </div>
     </div>
     {% endif %}
 
-    <form method="POST" action="{{ url_for('login') }}" class="hacker-form">
+    <form method="POST" action="{{ url_for('login') }}" class="hacker-form mt-2" id="login-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div class="form-group-hacker">
         <label><i class="fas fa-user"></i> USERNAME</label>
-        <input type="text" name="username" class="input-hacker" placeholder="Enter username" required autocomplete="off"/>
+        <input type="text" name="username" id="login-username" class="input-hacker" placeholder="Enter username" required autocomplete="off"/>
       </div>
       <div class="form-group-hacker">
         <label><i class="fas fa-key"></i> PASSWORD</label>
-        <input type="password" name="password" class="input-hacker" placeholder="Enter password" required autocomplete="current-password"/>
+        <input type="password" name="password" id="login-password" class="input-hacker" placeholder="Enter password" required autocomplete="current-password"/>
       </div>
 
       {% if not secure %}
       <div class="vuln-box">
-        <span class="vuln-label"><i class="fas fa-bug"></i> VULNERABILITY DEMO — CLIENT-SIDE ROLE</span>
+        <span class="vuln-label"><i class="fas fa-bug"></i> VULNERABILITY — CLIENT-SIDE ROLE INJECTION</span>
         <div class="form-group-hacker mt-2">
-          <label><i class="fas fa-user-tag"></i> ROLE (tamperable cookie)</label>
+          <label><i class="fas fa-user-tag"></i> ROLE (tamperable field)</label>
           <select name="role" class="input-hacker">
             <option value="user">user</option>
             <option value="moderator">moderator</option>
             <option value="admin">admin</option>
           </select>
         </div>
-        <small class="vuln-hint">In attack mode, role is taken from this field — privilege escalation possible!</small>
+        <small class="vuln-hint"><i class="fas fa-info-circle"></i> In attack mode, role is taken directly from this field — privilege escalation possible without admin credentials!</small>
       </div>
       {% endif %}
 
-      <button type="submit" class="btn-hacker btn-access w-100">
+      <button type="submit" class="btn-hacker btn-access w-100" id="login-submit">
         <i class="fas fa-sign-in-alt"></i> ACCESS SYSTEM
       </button>
     </form>
 
-    {% if secure %}
-    <div class="security-features-list">
+    {% if not secure %}
+    <div class="bruteforce-section mt-2">
+      <div class="vuln-box">
+        <span class="vuln-label"><i class="fas fa-robot"></i> BRUTE-FORCE SIMULATOR — INSECURE MODE</span>
+        <small class="vuln-hint">No lockout in attack mode — infinite attempts allowed. Watch the live log below.</small>
+        <div class="d-flex gap-2 mt-2 align-items-center">
+          <input type="text" id="bf-target" class="input-hacker flex-grow-1" placeholder="Target username" value="demo" style="font-size:0.75rem"/>
+          <button class="btn-hacker btn-danger-hacker" id="btn-brute" onclick="startBruteForce()">
+            <i class="fas fa-robot"></i> ATTACK
+          </button>
+        </div>
+        <div id="bf-log" class="bf-log mt-2" style="display:none"></div>
+        <div id="bf-result" class="mt-1" style="font-size:0.72rem"></div>
+      </div>
+    </div>
+    {% else %}
+    <div class="security-features-list mt-2">
       <div class="sec-feature"><i class="fas fa-check-circle text-success"></i> bcrypt password verification</div>
-      <div class="sec-feature"><i class="fas fa-check-circle text-success"></i> Account lockout after {{ 5 }} failed attempts</div>
-      <div class="sec-feature"><i class="fas fa-check-circle text-success"></i> CSRF token validation</div>
+      <div class="sec-feature"><i class="fas fa-check-circle text-success"></i> Account lockout after {{ max_attempts }} failed attempts</div>
+      <div class="sec-feature"><i class="fas fa-check-circle text-success"></i> CSRF token validation on every login</div>
       <div class="sec-feature"><i class="fas fa-check-circle text-success"></i> Session IP binding on login</div>
     </div>
     {% endif %}
 
-    <div class="auth-footer">
+    <div class="auth-footer mt-2">
       <a href="{{ url_for('register') }}" class="link-hacker">
         <i class="fas fa-user-plus"></i> CREATE ACCOUNT
       </a>
     </div>
-
     <div class="demo-creds">
       <span class="dim">admin / admin123 &nbsp;|&nbsp; moderator / mod123 &nbsp;|&nbsp; demo / demo123</span>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% if lockout_remaining and lockout_until_ts %}
+(function() {
+  const endMs = {{ lockout_until_ts }};
+  const btn = document.getElementById('login-submit');
+  const countdown = document.getElementById('lockout-countdown');
+  const bar = document.getElementById('lockout-bar');
+  if (btn) btn.disabled = true;
+
+  function tick() {
+    const remaining = Math.max(0, endMs - Date.now());
+    const mins = Math.floor(remaining / 60000);
+    const secs = Math.floor((remaining % 60000) / 1000);
+    if (countdown) countdown.textContent = `${mins}m ${secs}s`;
+    if (bar) bar.style.width = Math.max(5, (remaining / ({{ lockout_remaining }} * 60000)) * 100) + '%';
+    if (remaining <= 0) {
+      if (btn) btn.disabled = false;
+      if (countdown) countdown.textContent = '0s — try now';
+    } else {
+      setTimeout(tick, 1000);
+    }
+  }
+  tick();
+})();
+{% endif %}
+
+function startBruteForce() {
+  const target = document.getElementById('bf-target').value || 'demo';
+  const log = document.getElementById('bf-log');
+  const result = document.getElementById('bf-result');
+  const btn = document.getElementById('btn-brute');
+  if (!log) return;
+
+  log.style.display = '';
+  log.innerHTML = '<div class="bf-entry" style="color:var(--yellow)"><i class="fas fa-robot"></i> Initiating brute-force on "' + target + '"...</div>';
+  result.innerHTML = '';
+  btn.disabled = true;
+
+  fetch('/api/brute-force', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({target: target})
+  })
+  .then(r => r.json())
+  .then(data => {
+    log.innerHTML = '';
+    if (data.error) {
+      log.innerHTML = '<div class="bf-entry" style="color:var(--red)">' + data.error + '</div>';
+    } else {
+      let delay = 0;
+      data.attempts.forEach((attempt, i) => {
+        setTimeout(() => {
+          const color = attempt.status.includes('SUCCESS') || attempt.status.includes('CRACKED') ? 'var(--red)' :
+                        attempt.status === 'BLOCKED' ? 'var(--yellow)' : 'var(--text-dim)';
+          const icon = attempt.status.includes('CRACKED') ? 'fa-skull' : attempt.status === 'BLOCKED' ? 'fa-ban' : 'fa-times';
+          log.innerHTML += `<div class="bf-entry"><span style="color:var(--text-dim)">[${i+1}]</span> <span style="color:${color}"><i class="fas ${icon}"></i> "${attempt.password}" → ${attempt.status}</span></div>`;
+          log.scrollTop = log.scrollHeight;
+        }, delay);
+        delay += 400;
+      });
+      setTimeout(() => {
+        const cracked = data.attempts.find(a => a.status.includes('CRACKED') || a.status.includes('SUCCESS'));
+        result.innerHTML = cracked
+          ? '<div style="color:var(--red);font-weight:bold"><i class="fas fa-skull"></i> No lockout — brute force succeeded in ' + data.attempts.length + ' attempts!</div>'
+          : '<div style="color:var(--yellow)"><i class="fas fa-ban"></i> ' + (data.attempts[data.attempts.length-1]?.reason || 'Blocked by lockout') + '</div>';
+        btn.disabled = false;
+      }, delay + 500);
+    }
+  })
+  .catch(e => {
+    log.innerHTML = '<div style="color:var(--red)">Error: ' + e.message + '</div>';
+    btn.disabled = false;
+  });
+}
+</script>
 {% endblock %}

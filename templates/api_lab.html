@@ -5,70 +5,103 @@
 <div class="container-fluid px-4 py-3">
 
   <div class="page-header">
-    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./api_tester --jwt</div>
+    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./api_tester --jwt --inspect</div>
     <h1 class="page-title">LEVEL 8: API SECURITY LAB</h1>
-    <p class="page-sub">JWT authentication &bull; Token-based API &bull; Bearer authorization &bull; Endpoint protection</p>
+    <p class="page-sub">JWT authentication &bull; Token inspection &bull; Secure vs insecure validation &bull; Live API tester</p>
   </div>
 
   <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }} mb-3">
     <i class="fas {{ 'fa-shield-alt' if secure else 'fa-radiation' }}"></i>
     {% if secure %}
-      SECURE — JWT bearer tokens required. Endpoints protected by role-based permissions.
+      SECURE — JWT required with HMAC-SHA256 signature verification, expiry check, role claims.
     {% else %}
-      ATTACK MODE — Weak tokens issued. No role validation on endpoints.
+      ATTACK MODE — Any token accepted. Hardcoded bypass tokens work. Signature not verified!
     {% endif %}
   </div>
 
   <div class="row g-3">
 
-    <!-- Token issuer -->
+    <!-- Token Issuer -->
     <div class="col-md-5">
-      <div class="hacker-panel">
+      <div class="hacker-panel h-100">
         <div class="panel-header"><i class="fas fa-id-card"></i> TOKEN ISSUER</div>
         <div class="panel-body">
           <p style="font-size:0.8rem;color:var(--text-dim);margin-bottom:1rem">
             Logged in as: <strong>{{ username }}</strong>
             <span class="role-tag role-{{ role }}">{{ role|upper }}</span>
           </p>
+
+          {% if not secure %}
+          <div class="vuln-box mb-3">
+            <span class="vuln-label"><i class="fas fa-bug"></i> INSECURE — BYPASS TOKENS</span>
+            <div style="font-size:0.75rem;margin:6px 0">These hardcoded tokens are ALWAYS accepted in attack mode:</div>
+            {% for tok in ['admin', 'password', '00000000', 'bypass'] %}
+            <code class="payload-chip" onclick="useBypass('{{ tok }}')">{{ tok }}</code>
+            {% endfor %}
+            <div style="font-size:0.68rem;color:var(--text-dim);margin-top:4px">Click any bypass token to use it in the tester →</div>
+          </div>
+          {% endif %}
+
           <button class="btn-hacker btn-access w-100" id="btn-get-token">
-            <i class="fas fa-key"></i> GET API TOKEN
+            <i class="fas fa-key"></i> {{ 'GET JWT TOKEN' if secure else 'GET WEAK TOKEN' }}
           </button>
+
           <div id="token-result" class="mt-3" style="display:none">
             <div class="dim mb-1" style="font-size:0.7rem">ISSUED TOKEN:</div>
             <textarea class="input-hacker" id="token-display" rows="4" readonly
-                      style="font-size:0.65rem;word-break:break-all"></textarea>
+                      style="font-size:0.62rem;word-break:break-all;resize:none"></textarea>
             <div id="token-meta" class="dim mt-1" style="font-size:0.7rem"></div>
+
+            <!-- JWT Structure Breakdown -->
+            <div id="jwt-breakdown" style="display:none" class="mt-2">
+              <div class="dim mb-1" style="font-size:0.7rem">TOKEN STRUCTURE:</div>
+              <div class="jwt-explainer">
+                <div class="jwt-part jwt-header-part">
+                  <div class="jwt-part-label">① HEADER</div>
+                  <code class="jwt-part-val" id="jwt-header-val">—</code>
+                </div>
+                <div class="jwt-dot">.</div>
+                <div class="jwt-part jwt-payload-part">
+                  <div class="jwt-part-label">② PAYLOAD (claims)</div>
+                  <code class="jwt-part-val" id="jwt-payload-val">—</code>
+                </div>
+                <div class="jwt-dot">.</div>
+                <div class="jwt-part jwt-sig-part">
+                  <div class="jwt-part-label">③ SIGNATURE</div>
+                  <code class="jwt-part-val" id="jwt-sig-val">—</code>
+                </div>
+              </div>
+              <div id="jwt-decoded-payload" class="mt-2" style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:3px;padding:0.5rem">
+                <div class="dim" style="font-size:0.68rem">DECODED PAYLOAD:</div>
+                <pre class="jwt-pre" id="jwt-payload-content">—</pre>
+              </div>
+            </div>
+
+            <!-- Security notes -->
+            <div id="token-notes" class="mt-2"></div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- API tester -->
+    <!-- API Tester -->
     <div class="col-md-7">
-      <div class="hacker-panel">
-        <div class="panel-header"><i class="fas fa-plug"></i> API ENDPOINT TESTER</div>
+      <div class="hacker-panel h-100">
+        <div class="panel-header"><i class="fas fa-plug"></i> LIVE API ENDPOINT TESTER</div>
         <div class="panel-body">
           <div class="api-endpoint-list mb-3">
-            <div class="api-ep" onclick="callAPI('/api/protected', 'GET')">
-              <span class="api-method get">GET</span>
-              <span class="api-path">/api/protected</span>
-              <span class="api-desc dim">JWT-protected endpoint</span>
+            {% for method, path, desc, color in [
+              ('GET', '/api/protected', 'JWT-protected endpoint', 'green'),
+              ('GET', '/api/stats',     'System stats (session auth)', 'blue'),
+              ('GET', '/api/logs',      'Recent security logs', 'blue'),
+              ('GET', '/api/anomalies', 'Threat anomaly feed', 'yellow'),
+            ] %}
+            <div class="api-ep" onclick="callAPI('{{ path }}', 'GET')">
+              <span class="api-method get">{{ method }}</span>
+              <span class="api-path">{{ path }}</span>
+              <span class="api-desc dim">{{ desc }}</span>
             </div>
-            <div class="api-ep" onclick="callAPI('/api/stats', 'GET')">
-              <span class="api-method get">GET</span>
-              <span class="api-path">/api/stats</span>
-              <span class="api-desc dim">System stats (session auth)</span>
-            </div>
-            <div class="api-ep" onclick="callAPI('/api/logs', 'GET')">
-              <span class="api-method get">GET</span>
-              <span class="api-path">/api/logs</span>
-              <span class="api-desc dim">Recent security logs</span>
-            </div>
-            <div class="api-ep" onclick="callAPI('/api/anomalies', 'GET')">
-              <span class="api-method get">GET</span>
-              <span class="api-path">/api/anomalies</span>
-              <span class="api-desc dim">Threat anomaly feed</span>
-            </div>
+            {% endfor %}
           </div>
 
           <div class="form-group-hacker mb-2">
@@ -76,25 +109,42 @@
             <input type="text" id="custom-endpoint" class="input-hacker" value="/api/protected" placeholder="/api/endpoint"/>
           </div>
           <div class="form-group-hacker mb-2">
-            <label><i class="fas fa-key"></i> BEARER TOKEN (auto-filled from issuer)</label>
-            <input type="text" id="bearer-token" class="input-hacker" placeholder="Paste JWT token here" style="font-size:0.65rem"/>
+            <label>
+              <i class="fas fa-key"></i> BEARER TOKEN
+              {% if not secure %}<span style="color:var(--red);font-size:0.65rem"> (any value accepted in insecure mode)</span>{% endif %}
+            </label>
+            <input type="text" id="bearer-token" class="input-hacker" placeholder="Paste JWT or bypass token" style="font-size:0.65rem"/>
           </div>
           <button class="btn-hacker btn-patch w-100" onclick="callAPI(document.getElementById('custom-endpoint').value,'GET')">
             <i class="fas fa-paper-plane"></i> SEND REQUEST
           </button>
+
           <div id="api-response" class="mt-3" style="display:none">
-            <div class="dim mb-1" style="font-size:0.7rem">RESPONSE:</div>
-            <div id="api-status-badge" class="mb-1"></div>
-            <pre class="jwt-pre" id="api-response-body"></pre>
+            <!-- Request headers -->
+            <div class="mb-2">
+              <div class="dim mb-1" style="font-size:0.7rem"><i class="fas fa-arrow-up"></i> REQUEST HEADERS:</div>
+              <pre class="query-pre query-safe" id="req-headers" style="font-size:0.65rem"></pre>
+            </div>
+            <!-- Validation steps -->
+            <div id="validation-steps" class="mb-2" style="display:none">
+              <div class="dim mb-1" style="font-size:0.7rem"><i class="fas fa-list-check"></i> VALIDATION STEPS:</div>
+              <div id="validation-list"></div>
+            </div>
+            <!-- Response -->
+            <div>
+              <div class="dim mb-1" style="font-size:0.7rem"><i class="fas fa-arrow-down"></i> RESPONSE:</div>
+              <div id="api-status-badge" class="mb-1"></div>
+              <pre class="jwt-pre" id="api-response-body"></pre>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- API security explanation -->
+    <!-- Security Model -->
     <div class="col-12">
       <div class="hacker-panel">
-        <div class="panel-header"><i class="fas fa-info-circle"></i> API SECURITY MODEL</div>
+        <div class="panel-header"><i class="fas fa-info-circle"></i> API SECURITY MODEL — SECURE vs INSECURE</div>
         <div class="panel-body">
           <div class="row g-3">
             <div class="col-md-4">
@@ -102,39 +152,51 @@
                 <div class="concept-icon"><i class="fas fa-id-card"></i></div>
                 <div class="concept-title">JWT STRUCTURE</div>
                 <ul class="concept-list">
-                  <li>Header: algorithm type</li>
-                  <li>Payload: claims (user, role, exp)</li>
-                  <li>Signature: HMAC-SHA256</li>
-                  <li>Stateless — no server DB lookup</li>
+                  <li>Header: algorithm type (HS256)</li>
+                  <li>Payload: claims (sub, role, exp, iat)</li>
+                  <li>Signature: HMAC-SHA256(header.payload, secret)</li>
+                  <li>Stateless — no DB lookup per request</li>
                   <li>Expires automatically (1 hour)</li>
                 </ul>
               </div>
             </div>
             <div class="col-md-4">
-              <div class="vuln-box">
+              <div class="vuln-box h-100">
                 <span class="vuln-label"><i class="fas fa-skull"></i> INSECURE API PATTERNS</span>
                 <ul class="vuln-list mt-2">
                   <li>No authentication on endpoints</li>
-                  <li>API keys in query strings</li>
-                  <li>No token expiry</li>
-                  <li>Verbose error messages leak info</li>
-                  <li>No rate limiting</li>
-                  <li>IDOR — direct object reference</li>
+                  <li>Hardcoded bypass tokens ("admin", "password")</li>
+                  <li>No token expiry — valid forever</li>
+                  <li>No signature verification — any JWT accepted</li>
+                  <li>Verbose error messages leak server info</li>
+                  <li>No rate limiting — unlimited requests</li>
+                  <li>IDOR — predict other user IDs</li>
                 </ul>
               </div>
             </div>
             <div class="col-md-4">
-              <div class="secure-box">
+              <div class="secure-box h-100">
                 <span class="secure-label"><i class="fas fa-shield-alt"></i> SECURE API PATTERNS</span>
                 <ul class="vuln-list mt-2">
                   <li>Bearer JWT in Authorization header</li>
-                  <li>Short expiry (1 hour)</li>
-                  <li>Role/permission claims in token</li>
-                  <li>HTTPS only</li>
+                  <li>Short expiry (1 hour max)</li>
+                  <li>Role/permission claims verified</li>
+                  <li>HTTPS only — no plaintext</li>
                   <li>Rate limiting per token</li>
-                  <li>Minimal error exposure</li>
+                  <li>Minimal error exposure to client</li>
+                  <li>Token blacklist on logout</li>
                 </ul>
               </div>
+            </div>
+          </div>
+
+          <div class="learn-panel mt-3">
+            <div class="learn-header" onclick="toggleLearn(this)"><i class="fas fa-graduation-cap"></i> REAL-WORLD JWT VULNERABILITIES <i class="fas fa-chevron-down"></i></div>
+            <div class="learn-body">
+              <p><strong>alg:none attack:</strong> Some libraries accept <code>{"alg":"none"}</code> in the header, skipping signature verification entirely. A forged token with any payload gets accepted.</p>
+              <p><strong>Algorithm confusion (RS256→HS256):</strong> If a server accepts both RS256 and HS256, an attacker can forge tokens using the public key as the HMAC secret.</p>
+              <p><strong>Weak secret:</strong> JWT signed with "secret" or "password" can be brute-forced offline using tools like <code>hashcat</code> or <code>jwt_tool</code>.</p>
+              <p><strong>Real examples:</strong> Auth0 (2015) — alg:none bypass. Portswigger research exposed algorithm confusion attacks in many JWT libraries.</p>
             </div>
           </div>
         </div>
@@ -149,26 +211,81 @@
 <script>
 let cachedToken = '';
 
+function b64DecodeUnicode(str) {
+  try {
+    return atob(str.replace(/-/g,'+').replace(/_/g,'/') + '==='.slice((str.length+3)%4 || 4));
+  } catch(e) { return str; }
+}
+
+function showJwtBreakdown(token) {
+  const parts = token.split('.');
+  if (parts.length !== 3) return;
+  const breakdown = document.getElementById('jwt-breakdown');
+  if (breakdown) breakdown.style.display = '';
+  const hEl = document.getElementById('jwt-header-val');
+  const pEl = document.getElementById('jwt-payload-val');
+  const sEl = document.getElementById('jwt-sig-val');
+  const pcEl = document.getElementById('jwt-payload-content');
+  if (hEl) hEl.textContent = parts[0];
+  if (pEl) pEl.textContent = parts[1];
+  if (sEl) sEl.textContent = parts[2];
+  if (pcEl) {
+    try {
+      const decoded = JSON.parse(b64DecodeUnicode(parts[1]));
+      pcEl.textContent = JSON.stringify(decoded, null, 2);
+    } catch(e) { pcEl.textContent = b64DecodeUnicode(parts[1]); }
+  }
+}
+
 document.getElementById('btn-get-token').addEventListener('click', () => {
   fetch('/api/token', { method: 'POST' })
     .then(r => r.json())
     .then(data => {
       const el = document.getElementById('token-result');
       el.style.display = '';
-      document.getElementById('token-display').value = data.token || 'Error';
-      document.getElementById('bearer-token').value = data.token || '';
-      cachedToken = data.token || '';
+      const token = data.token || 'Error';
+      document.getElementById('token-display').value = token;
+      document.getElementById('bearer-token').value = token;
+      cachedToken = token;
+
       const meta = data.expires_in
-        ? `Type: ${data.type || 'Bearer'} | Expires in: ${data.expires_in}s`
+        ? `Type: ${data.type} | Expires: ${data.expires_in}s | Role: ${data.decoded_payload?.role || ''}`
         : (data.note || '');
       document.getElementById('token-meta').textContent = meta;
+
+      // Show JWT breakdown for proper tokens
+      if (token.includes('.')) { showJwtBreakdown(token); }
+
+      // Notes
+      const notesEl = document.getElementById('token-notes');
+      const notes = data.security_notes || data.vulnerabilities || [];
+      if (notes.length > 0) {
+        const isVuln = !!data.vulnerabilities;
+        notesEl.innerHTML = notes.map(n =>
+          `<div class="jwt-note ${isVuln ? 'jwt-note-warn' : 'jwt-note-secure'} mb-1"><i class="fas ${isVuln ? 'fa-skull' : 'fa-check'}"></i> ${n}</div>`
+        ).join('');
+      }
     });
 });
+
+function useBypass(token) {
+  document.getElementById('bearer-token').value = token;
+  cachedToken = token;
+}
 
 function callAPI(path, method) {
   const token = document.getElementById('bearer-token').value || cachedToken;
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = 'Bearer ' + token;
+
+  // Show request headers
+  const reqHdr = document.getElementById('req-headers');
+  if (reqHdr) {
+    reqHdr.textContent = `GET ${path} HTTP/1.1\nHost: hvs.example.com\nAuthorization: Bearer ${token || '(none)'}\nContent-Type: application/json`;
+  }
+
+  document.getElementById('custom-endpoint').value = path;
+
   fetch(path, { method, headers })
     .then(r => {
       const status = r.status;
@@ -180,11 +297,49 @@ function callAPI(path, method) {
       const badge = document.getElementById('api-status-badge');
       badge.innerHTML = `<span class="layer-badge ${status < 300 ? 'badge-secure' : 'badge-vuln'}">${status} ${status < 300 ? 'OK' : 'ERROR'}</span>`;
       document.getElementById('api-response-body').textContent = JSON.stringify(data, null, 2);
+
+      // Show validation info from response
+      const valEl = document.getElementById('validation-steps');
+      const valList = document.getElementById('validation-list');
+      if (data.validation || data.warning) {
+        valEl.style.display = '';
+        const v = data.validation || {};
+        const steps = [
+          { label: 'Token present', ok: !!token },
+          { label: 'Signature verified', ok: v.signature_verified },
+          { label: 'Expiry checked', ok: v.expiry_checked },
+          { label: `Note: ${v.note || ''}`, ok: v.signature_verified }
+        ];
+        valList.innerHTML = steps.map(s =>
+          `<div class="flow-step flow-${s.ok ? 'success' : 'danger'}" style="padding:0.3rem 0.5rem;margin-bottom:3px">
+            <div class="flow-step-icon"><i class="fas ${s.ok ? 'fa-check-circle' : 'fa-times-circle'}"></i></div>
+            <div class="flow-step-body"><div class="flow-step-detail">${s.label}</div></div>
+          </div>`
+        ).join('');
+      } else {
+        valEl.style.display = 'none';
+      }
     })
     .catch(err => {
-      document.getElementById('api-response').style.display = '';
-      document.getElementById('api-response-body').textContent = 'Error: ' + err.message;
+      const el = document.getElementById('api-response');
+      el.style.display = '';
+      document.getElementById('api-response-body').textContent = 'Network error: ' + err.message;
     });
 }
+
+function toggleLearn(header) {
+  const body = header.nextElementSibling;
+  const icon = header.querySelector('.fa-chevron-down, .fa-chevron-up');
+  if (!body.style.display || body.style.display === 'none') {
+    body.style.display = '';
+    if (icon) { icon.classList.replace('fa-chevron-down','fa-chevron-up'); }
+  } else {
+    body.style.display = 'none';
+    if (icon) { icon.classList.replace('fa-chevron-up','fa-chevron-down'); }
+  }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.learn-body').forEach(el => el.style.display = 'none');
+});
 </script>
 {% endblock %}

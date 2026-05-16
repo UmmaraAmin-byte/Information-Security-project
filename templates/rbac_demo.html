@@ -5,68 +5,149 @@
 <div class="container-fluid px-4 py-3">
 
   <div class="page-header">
-    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./test_rbac --permission-check</div>
+    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./test_rbac --permission-check --trace</div>
     <h1 class="page-title">LEVEL 2: RBAC EXPLOITATION</h1>
-    <p class="page-sub">Hierarchical roles &bull; Permission-based access &bull; Privilege escalation</p>
+    <p class="page-sub">Hierarchical roles &bull; Permission-based access &bull; Cookie vs session vs DB role comparison</p>
   </div>
 
   <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }} mb-3">
     <i class="fas {{ 'fa-shield-alt' if secure else 'fa-radiation' }}"></i>
     {% if secure %}
-      SECURE — Permissions checked from server-side session. Cookie tampering has no effect.
+      SECURE — Role from server-side session. Cookie tampering has zero effect.
     {% else %}
-      ATTACK MODE — Role read from <code>role</code> cookie. Modify cookie to escalate!
+      ATTACK MODE — Role read from <code>role</code> cookie. Modify cookie to escalate privileges!
     {% endif %}
+  </div>
+
+  <!-- Role Source Comparison -->
+  <div class="hacker-panel mb-3">
+    <div class="panel-header"><i class="fas fa-balance-scale"></i> ROLE SOURCE COMPARISON — COOKIE vs SESSION vs DATABASE</div>
+    <div class="panel-body">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <div class="role-source-card {{ 'role-source-danger' if not secure else '' }}">
+            <div class="role-source-title"><i class="fas fa-cookie"></i> COOKIE ROLE</div>
+            <div class="role-source-val role-{{ cookie_role }}">{{ cookie_role|upper }}</div>
+            <div class="role-source-sub">Set in browser — user-editable</div>
+            {% if not secure %}
+            <div class="role-source-note note-vuln">EFFECTIVE ROLE in attack mode!</div>
+            {% else %}
+            <div class="role-source-note note-safe">IGNORED in secure mode</div>
+            {% endif %}
+            {% if cookie_role != role %}
+            <div class="role-tamper-badge"><i class="fas fa-exclamation-triangle"></i> TAMPERED!</div>
+            {% endif %}
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="role-source-card {{ 'role-source-secure' if secure else '' }}">
+            <div class="role-source-title"><i class="fas fa-server"></i> SESSION ROLE</div>
+            <div class="role-source-val role-{{ role }}">{{ role|upper }}</div>
+            <div class="role-source-sub">Set at login — server-side</div>
+            {% if secure %}
+            <div class="role-source-note note-safe">EFFECTIVE ROLE in secure mode</div>
+            {% else %}
+            <div class="role-source-note note-vuln">Overridden by cookie in attack mode</div>
+            {% endif %}
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="role-source-card">
+            <div class="role-source-title"><i class="fas fa-database"></i> DATABASE ROLE</div>
+            <div class="role-source-val role-{{ db_role }}">{{ db_role|upper }}</div>
+            <div class="role-source-sub">Ground truth — admin-set only</div>
+            <div class="role-source-note note-safe">Authoritative source (always)</div>
+          </div>
+        </div>
+      </div>
+
+      {% if not secure %}
+      <div class="vuln-box mt-2">
+        <span class="vuln-label"><i class="fas fa-bug"></i> EXPLOIT THIS — COOKIE INJECTION</span>
+        <p class="mt-1" style="font-size:0.75rem">Open browser dev tools (F12 → Console) and run:</p>
+        <code class="demo-code" style="cursor:pointer" onclick="copyCode(this)">document.cookie = "role=admin; path=/"</code>
+        <p class="mt-1" style="font-size:0.75rem">Then refresh this page — your cookie role becomes admin with full permissions!</p>
+        <button class="btn-hacker btn-danger-hacker btn-sm-hacker mt-1" onclick="injectAdminCookie()">
+          <i class="fas fa-skull"></i> INJECT ADMIN COOKIE NOW
+        </button>
+        <span id="cookie-inject-status" class="dim ms-2" style="font-size:0.72rem"></span>
+      </div>
+      {% endif %}
+    </div>
   </div>
 
   <div class="row g-3">
 
-    <!-- Permission checker -->
+    <!-- Permission Checker -->
     <div class="col-md-5">
-      <div class="hacker-panel">
+      <div class="hacker-panel h-100">
         <div class="panel-header"><i class="fas fa-key"></i> PERMISSION CHECK SIMULATOR</div>
         <div class="panel-body">
           <form method="POST" action="{{ url_for('rbac_demo') }}" class="hacker-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="form-group-hacker">
-              <label><i class="fas fa-shield-alt"></i> SELECT PERMISSION TO TEST</label>
+              <label><i class="fas fa-shield-alt"></i> SELECT PERMISSION TO CHECK</label>
               <select name="permission" class="input-hacker">
-                {% for perm in ['view_dashboard','view_levels','use_exploits','view_logs','view_security_dashboard','manage_users','access_admin','access_api','access_crypto_lab'] %}
+                {% for perm in ['view_dashboard','view_levels','use_exploits','view_logs',
+                                 'view_security_dashboard','manage_users','manage_roles',
+                                 'access_admin','access_api','access_crypto_lab'] %}
                 <option value="{{ perm }}">{{ perm }}</option>
                 {% endfor %}
               </select>
             </div>
-            <button type="submit" class="btn-hacker {{ 'btn-patch' if secure else 'btn-level-vuln w-100' }}">
+            <button type="submit" class="btn-hacker {{ 'btn-patch' if secure else 'btn-level-vuln' }} w-100">
               <i class="fas fa-search"></i> CHECK PERMISSION
             </button>
           </form>
 
           {% if result %}
           <div class="result-box result-{{ result.color }} mt-3">
-            <div class="result-status">{{ result.status }}</div>
+            <div class="result-status">
+              <i class="fas {{ 'fa-check-circle' if result.granted else 'fa-ban' }}"></i>
+              {{ result.status }}
+            </div>
             <div class="result-msg">
-              Role: <strong>{{ result.role }}</strong><br/>
-              Permission: <code>{{ result.permission }}</code><br/>
-              Source: <em>{{ result.source }}</em>
+              <div class="d-flex gap-3 flex-wrap mt-1">
+                <span>Effective Role: <strong>{{ result.effective_role }}</strong></span>
+                <span>Permission: <code>{{ result.permission }}</code></span>
+              </div>
+              <div class="mt-1" style="font-size:0.72rem">Source: <em>{{ result.source }}</em></div>
+              {% if result.tampered %}
+              <div class="mt-1" style="color:var(--red);font-size:0.72rem">
+                <i class="fas fa-exclamation-triangle"></i> Cookie role ({{ result.cookie_role }}) differs from session role ({{ result.session_role }})!
+              </div>
+              {% endif %}
             </div>
           </div>
-          {% endif %}
 
-          {% if not secure %}
-          <div class="vuln-box mt-3">
-            <span class="vuln-label"><i class="fas fa-bug"></i> EXPLOIT THIS</span>
-            <p class="mt-1" style="font-size:0.75rem">Open browser console and run:</p>
-            <code class="demo-code">document.cookie = "role=admin; path=/"</code>
-            <p class="mt-1" style="font-size:0.75rem">Then retry — cookie role used instead of session!</p>
+          <!-- Decision flow -->
+          <div class="flow-steps mt-2">
+            {% set decision_steps = [
+              ('Identify Mode', 'SECURE mode' if secure else 'INSECURE (attack) mode', 'info'),
+              ('Read Role From', result.source, 'success' if secure else 'warning'),
+              ('Effective Role', result.effective_role, 'success' if secure else 'warning'),
+              ('Permission Check', result.permission + ': ' + ('IN permission set' if result.granted else 'NOT in permission set'), 'success' if result.granted else 'danger'),
+              ('Decision', result.status, 'success' if result.granted else 'danger'),
+            ] %}
+            {% for title, detail, status in decision_steps %}
+            <div class="flow-step flow-{{ status }}" style="margin-bottom:3px">
+              <div class="flow-step-num">{{ loop.index }}</div>
+              <div class="flow-step-body">
+                <div class="flow-step-title" style="font-size:0.72rem">{{ title }}</div>
+                <div class="flow-step-detail" style="font-size:0.68rem">{{ detail }}</div>
+              </div>
+              <div class="flow-step-icon"><i class="fas {{ 'fa-check-circle' if status == 'success' else 'fa-times-circle' if status == 'danger' else 'fa-info-circle' }}"></i></div>
+            </div>
+            {% endfor %}
           </div>
           {% endif %}
         </div>
       </div>
     </div>
 
-    <!-- Role-permission matrix -->
+    <!-- Full Permission Matrix -->
     <div class="col-md-7">
-      <div class="hacker-panel">
+      <div class="hacker-panel h-100">
         <div class="panel-header"><i class="fas fa-table"></i> FULL PERMISSION MATRIX</div>
         <div class="panel-body">
           <table class="acl-table w-100">
@@ -74,12 +155,16 @@
               <tr>
                 <th>PERMISSION</th>
                 {% for rname in ['guest','user','moderator','admin'] %}
-                <th class="text-center">{{ rname|upper }}</th>
+                <th class="text-center" style="color:{{ 'var(--text-dim)' if rname=='guest' else 'var(--blue)' if rname=='user' else 'var(--purple)' if rname=='moderator' else 'var(--yellow)' }}">
+                  {{ rname|upper }}
+                </th>
                 {% endfor %}
               </tr>
             </thead>
             <tbody>
-              {% set all_perms = ['view_dashboard','view_levels','use_exploits','view_logs','view_security_dashboard','manage_users','manage_roles','access_admin','access_api','access_crypto_lab'] %}
+              {% set all_perms = ['view_dashboard','view_levels','use_exploits','view_logs',
+                                   'view_security_dashboard','manage_users','manage_roles',
+                                   'access_admin','access_api','access_crypto_lab'] %}
               {% for perm in all_perms %}
               <tr>
                 <td style="font-size:0.68rem">{{ perm }}</td>
@@ -100,13 +185,13 @@
       </div>
     </div>
 
-    <!-- Role hierarchy visual -->
+    <!-- Role Hierarchy Visual -->
     <div class="col-12">
       <div class="hacker-panel">
         <div class="panel-header"><i class="fas fa-sitemap"></i> ROLE HIERARCHY — INHERITANCE MODEL</div>
         <div class="panel-body">
           <div class="role-inherit-flow">
-            {% for rname, lvl in [('admin',3),('moderator',2),('user',1),('guest',0)] %}
+            {% for rname, lvl, color in [('admin',3,'yellow'),('moderator',2,'purple'),('user',1,'blue'),('guest',0,'dim')] %}
             <div class="role-inherit-card role-card-{{ rname }}">
               <div class="role-card-level">LEVEL {{ lvl }}</div>
               <div class="role-card-name">{{ rname|upper }}</div>
@@ -114,14 +199,24 @@
                 {% for p in role_permissions.get(rname, []) %}
                 <span class="perm-chip">{{ p }}</span>
                 {% endfor %}
+                {% if not role_permissions.get(rname, []) %}
+                <span class="perm-chip" style="color:var(--text-dim)">no permissions</span>
+                {% endif %}
               </div>
             </div>
             {% if not loop.last %}<div class="role-arrow"><i class="fas fa-arrow-right"></i></div>{% endif %}
             {% endfor %}
           </div>
-          <div class="mt-3" style="font-size:0.75rem;color:var(--text-dim)">
-            <i class="fas fa-info-circle"></i>
-            Each role in this system has <strong>explicit permission sets</strong> — higher roles have more permissions, but each role's access is independently defined (not purely inherited). This prevents permission creep.
+
+          <div class="learn-panel mt-3">
+            <div class="learn-header" onclick="toggleLearn(this)"><i class="fas fa-graduation-cap"></i> WHY COOKIE-BASED ROLES ARE DANGEROUS <i class="fas fa-chevron-down"></i></div>
+            <div class="learn-body">
+              <p><strong>What is happening:</strong> In insecure mode, the server reads the role from a cookie the client sends. Cookies are user-controlled — anyone can open browser dev tools and change them.</p>
+              <p><strong>Attack flow:</strong> User logs in as "demo" (user role) → opens console → runs <code>document.cookie="role=admin"</code> → refreshes → server reads <code>role=admin</code> from cookie → full admin access granted!</p>
+              <p><strong>Why it's widespread:</strong> Developers sometimes use cookies to "remember" the role to avoid DB lookups. This is a Broken Access Control vulnerability — OWASP Top 10 #1.</p>
+              <p><strong>Secure fix:</strong> Role is stored in the signed, server-side session (Flask's SecureCookie uses HMAC — client cannot forge it). Any privilege change requires a DB update by an admin.</p>
+              <p><strong>Real-world examples:</strong> Numerous early SaaS apps had this pattern. The "isAdmin=true" cookie is a classic penetration testing finding.</p>
+            </div>
           </div>
         </div>
       </div>
@@ -129,4 +224,36 @@
 
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function injectAdminCookie() {
+  document.cookie = "role=admin; path=/";
+  const status = document.getElementById('cookie-inject-status');
+  if (status) status.textContent = '✓ Admin cookie injected! Refreshing…';
+  setTimeout(() => location.reload(), 800);
+}
+
+function copyCode(el) {
+  navigator.clipboard.writeText(el.textContent).catch(() => {});
+  el.style.borderColor = 'var(--green)';
+  setTimeout(() => el.style.borderColor = '', 600);
+}
+
+function toggleLearn(header) {
+  const body = header.nextElementSibling;
+  const icon = header.querySelector('.fa-chevron-down, .fa-chevron-up');
+  if (!body.style.display || body.style.display === 'none') {
+    body.style.display = '';
+    if (icon) { icon.classList.replace('fa-chevron-down','fa-chevron-up'); }
+  } else {
+    body.style.display = 'none';
+    if (icon) { icon.classList.replace('fa-chevron-up','fa-chevron-down'); }
+  }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.learn-body').forEach(el => el.style.display = 'none');
+});
+</script>
 {% endblock %}

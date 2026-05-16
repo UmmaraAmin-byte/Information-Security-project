@@ -5,36 +5,44 @@
 <div class="container-fluid px-4 py-3">
 
   <div class="page-header">
-    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./csrf_attack --simulate</div>
+    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./csrf_attack --simulate --visual</div>
     <h1 class="page-title">LEVEL 7: CSRF SIMULATION</h1>
-    <p class="page-sub">Cross-Site Request Forgery &bull; Token validation &bull; Forged request demo</p>
+    <p class="page-sub">Cross-Site Request Forgery &bull; Token validation &bull; Request flow visualization</p>
   </div>
 
   <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }} mb-3">
     <i class="fas {{ 'fa-shield-alt' if secure else 'fa-radiation' }}"></i>
     {% if secure %}
-      SECURE — CSRF token validated server-side. Forged requests are rejected.
+      SECURE — CSRF token validated server-side. Forged requests rejected before execution.
     {% else %}
-      ATTACK MODE — No CSRF validation. Any request (even forged) will be executed!
+      ATTACK MODE — No CSRF validation. ANY request (even forged cross-origin) will be executed!
     {% endif %}
   </div>
 
   <div class="row g-3">
 
-    <!-- Legit request -->
-    <div class="col-md-6">
-      <div class="hacker-panel">
-        <div class="panel-header" style="color:var(--green)"><i class="fas fa-check-circle"></i> LEGITIMATE REQUEST (with CSRF token)</div>
+    <!-- Legitimate Request -->
+    <div class="col-md-5">
+      <div class="hacker-panel h-100">
+        <div class="panel-header" style="color:var(--green)"><i class="fas fa-check-circle"></i> LEGITIMATE REQUEST</div>
         <div class="panel-body">
-          <p style="font-size:0.8rem;color:var(--text-dim)">This form submits with the correct CSRF token embedded by the server:</p>
+          <div class="site-label site-victim">
+            <i class="fas fa-globe"></i> VICTIM'S BANK (bank.example.com)
+          </div>
+          <p style="font-size:0.78rem;color:var(--text-dim);margin:0.5rem 0">Submitted from the real banking page with a valid CSRF token:</p>
           <form method="POST" action="{{ url_for('csrf_demo') }}" class="hacker-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <input type="hidden" name="action" value="wire_transfer"/>
+            <input type="hidden" name="forged" value="0"/>
             <div class="form-group-hacker">
               <label><i class="fas fa-dollar-sign"></i> TRANSFER AMOUNT</label>
               <input type="text" name="amount" class="input-hacker" value="500" placeholder="Amount"/>
             </div>
-            <button type="submit" class="btn-hacker btn-access w-100">
+            <div class="token-display mt-1">
+              <div class="dim" style="font-size:0.68rem">CSRF TOKEN (hidden field):</div>
+              <code style="font-size:0.62rem;color:var(--green);word-break:break-all">{{ csrf_token() }}</code>
+            </div>
+            <button type="submit" class="btn-hacker btn-access w-100 mt-2">
               <i class="fas fa-paper-plane"></i> SUBMIT LEGIT REQUEST
             </button>
           </form>
@@ -42,26 +50,74 @@
       </div>
     </div>
 
-    <!-- Forged request -->
-    <div class="col-md-6">
-      <div class="hacker-panel">
-        <div class="panel-header" style="color:var(--red)"><i class="fas fa-skull-crossbones"></i> FORGED REQUEST (no/wrong CSRF token)</div>
+    <!-- Attacker's Site -->
+    <div class="col-md-7">
+      <div class="hacker-panel h-100" style="border-color:rgba(255,34,68,0.3)">
+        <div class="panel-header" style="color:var(--red)"><i class="fas fa-skull-crossbones"></i> ATTACKER'S FORGED PAGE (evil.attacker.com)</div>
         <div class="panel-body">
-          <p style="font-size:0.8rem;color:var(--text-dim)">Simulates a cross-site attack — no valid CSRF token:</p>
+          <div class="site-label site-attacker">
+            <i class="fas fa-skull"></i> ATTACKER'S SITE — victim visits this page
+          </div>
+          <div class="attacker-page-mock mt-2">
+            <div class="mock-title">🎉 You won a free iPhone! Click to claim!</div>
+            <div class="mock-hidden-form">
+              <div class="dim" style="font-size:0.68rem;margin-bottom:4px">HIDDEN FORM (invisible to user):</div>
+              <pre class="code-display" style="font-size:0.62rem">&lt;form action="bank.example.com/transfer" method="POST"&gt;
+  &lt;input type="hidden" name="action" value="wire_transfer"/&gt;
+  &lt;input type="hidden" name="amount" value="99999"/&gt;
+  &lt;input type="hidden" name="csrf_token" value="FORGED_INVALID_TOKEN_12345"/&gt;
+&lt;/form&gt;
+&lt;script&gt;document.forms[0].submit();&lt;/script&gt;</pre>
+            </div>
+          </div>
+          <p style="font-size:0.78rem;color:var(--text-dim);margin:0.6rem 0">Browser auto-sends victim's session cookie with this forged request:</p>
           <form method="POST" action="{{ url_for('csrf_demo') }}" class="hacker-form">
             <input type="hidden" name="csrf_token" value="FORGED_INVALID_TOKEN_12345"/>
             <input type="hidden" name="action" value="wire_transfer"/>
+            <input type="hidden" name="forged" value="1"/>
             <div class="form-group-hacker">
-              <label><i class="fas fa-skull"></i> FORGED AMOUNT</label>
-              <input type="text" name="amount" class="input-hacker" value="99999" style="border-color:var(--red)"/>
+              <label><i class="fas fa-skull"></i> FORGED TRANSFER AMOUNT</label>
+              <input type="text" name="amount" class="input-hacker" value="99999" style="border-color:var(--red);color:var(--red)"/>
             </div>
-            <button type="submit" class="btn-hacker btn-level-vuln w-100">
-              <i class="fas fa-bug"></i> SUBMIT FORGED REQUEST
+            <div class="token-display mt-1" style="border-color:rgba(255,34,68,0.3)">
+              <div class="dim" style="font-size:0.68rem;color:var(--red)">FORGED CSRF TOKEN:</div>
+              <code style="font-size:0.62rem;color:var(--red)">FORGED_INVALID_TOKEN_12345</code>
+            </div>
+            <button type="submit" class="btn-hacker btn-level-vuln w-100 mt-2">
+              <i class="fas fa-bug"></i> SEND FORGED REQUEST
             </button>
           </form>
         </div>
       </div>
     </div>
+
+    <!-- Request Flow Visualization -->
+    {% if flow_steps %}
+    <div class="col-12">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-project-diagram"></i> REQUEST VALIDATION FLOW — STEP BY STEP</div>
+        <div class="panel-body">
+          <div class="flow-steps">
+            {% for step in flow_steps %}
+            <div class="flow-step flow-{{ step.status }}">
+              <div class="flow-step-num">{{ loop.index }}</div>
+              <div class="flow-step-body">
+                <div class="flow-step-title">{{ step.step }}</div>
+                <div class="flow-step-detail">{{ step.detail }}</div>
+              </div>
+              <div class="flow-step-icon">
+                <i class="fas {{ 'fa-check-circle' if step.status == 'success' else 'fa-times-circle' if step.status == 'danger' else 'fa-exclamation-circle' if step.status == 'warning' else 'fa-info-circle' }}"></i>
+              </div>
+            </div>
+            {% if not loop.last %}
+            <div class="flow-arrow"><i class="fas fa-arrow-down"></i></div>
+            {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
 
     {% if result %}
     <div class="col-12">
@@ -75,36 +131,44 @@
     </div>
     {% endif %}
 
-    <!-- Explanation -->
+    <!-- How CSRF works -->
     <div class="col-12">
       <div class="hacker-panel">
-        <div class="panel-header"><i class="fas fa-info-circle"></i> HOW CSRF WORKS</div>
+        <div class="panel-header"><i class="fas fa-info-circle"></i> CSRF ATTACK FLOW</div>
         <div class="panel-body">
           <div class="row g-3">
-            <div class="col-md-6">
+            <div class="col-md-4">
               <div class="vuln-box">
                 <span class="vuln-label"><i class="fas fa-skull"></i> ATTACK SCENARIO</span>
                 <ol class="vuln-list mt-2">
-                  <li>Victim is logged into banking site</li>
-                  <li>Attacker hosts malicious page with hidden form</li>
+                  <li>Victim logs into banking site (session cookie set)</li>
                   <li>Victim visits attacker's page</li>
-                  <li>Hidden form auto-submits to banking site</li>
-                  <li>Browser sends victim's session cookie automatically</li>
-                  <li>Bank executes the forged transaction!</li>
+                  <li>Attacker's hidden form auto-submits to banking site</li>
+                  <li>Browser sends victim's cookie automatically</li>
+                  <li>Without CSRF check — bank executes the transaction!</li>
                 </ol>
               </div>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
               <div class="secure-box">
-                <span class="secure-label"><i class="fas fa-shield-alt"></i> DEFENSE MECHANISM</span>
+                <span class="secure-label"><i class="fas fa-shield-alt"></i> CSRF TOKEN DEFENSE</span>
                 <ol class="vuln-list mt-2">
                   <li>Server generates unique random token per session</li>
                   <li>Token embedded in every form as hidden field</li>
                   <li>On POST, server validates token matches session</li>
-                  <li>Forged requests from other sites lack valid token</li>
-                  <li>Request rejected — no token = no action</li>
-                  <li>Also: SameSite=Strict cookie flag prevents cross-origin sends</li>
+                  <li>Attacker cannot read token from another origin (SOP)</li>
+                  <li>Forged request lacks valid token → rejected</li>
                 </ol>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="learn-panel">
+                <div class="learn-header" onclick="toggleLearn(this)"><i class="fas fa-graduation-cap"></i> REAL-WORLD IMPACT <i class="fas fa-chevron-down"></i></div>
+                <div class="learn-body">
+                  <p><strong>Real attacks:</strong> Netflix (2006) — account hijacking via CSRF. Twitter (2009) — forced follows. eBay — account data changes.</p>
+                  <p><strong>Additional defenses:</strong> SameSite=Strict cookie prevents the browser sending cookies on cross-origin requests at all. Double Submit Cookie pattern. Origin/Referer header checking.</p>
+                  <p><strong>Why it's sneaky:</strong> The victim doesn't need to click anything — visiting a page with a hidden auto-submit form is enough.</p>
+                </div>
               </div>
             </div>
           </div>
@@ -114,4 +178,23 @@
 
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleLearn(header) {
+  const body = header.nextElementSibling;
+  const icon = header.querySelector('.fa-chevron-down, .fa-chevron-up');
+  if (!body.style.display || body.style.display === 'none') {
+    body.style.display = '';
+    if (icon) { icon.classList.replace('fa-chevron-down','fa-chevron-up'); }
+  } else {
+    body.style.display = 'none';
+    if (icon) { icon.classList.replace('fa-chevron-up','fa-chevron-down'); }
+  }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.learn-body').forEach(el => el.style.display = 'none');
+});
+</script>
 {% endblock %}

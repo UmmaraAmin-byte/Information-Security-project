@@ -30,7 +30,14 @@
     </div>
   </div>
 
-  <!-- Threat alert -->
+  {% if session.get('escalation_detected') %}
+  <div class="threat-alert mt-2" style="border-color:rgba(255,34,68,0.5)">
+    <i class="fas fa-exclamation-triangle"></i>
+    <strong>PRIVILEGE ESCALATION DETECTED</strong> — Role was tampered in insecure mode.
+    Session role restored from database. Logged to security audit.
+  </div>
+  {% endif %}
+
   {% if threat_count > 0 and secure %}
   <div class="threat-alert mt-2">
     <i class="fas fa-radiation"></i>
@@ -42,18 +49,71 @@
 
   <div class="row g-3 mt-1">
 
+    <!-- Security Score -->
+    <div class="col-md-4">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-shield-alt"></i> SECURITY SCORE</div>
+        <div class="panel-body">
+          <div class="score-display">
+            <div class="score-circle">
+              <svg width="100" height="100" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="42" fill="none" stroke="var(--border-color)" stroke-width="8"/>
+                <circle cx="50" cy="50" r="42" fill="none"
+                        stroke="{{ 'var(--green)' if sec_score.score >= 80 else 'var(--yellow)' if sec_score.score >= 50 else 'var(--red)' }}"
+                        stroke-width="8"
+                        stroke-dasharray="{{ (sec_score.score / 100 * 263.9) | round(1) }} 263.9"
+                        stroke-dashoffset="65.97"
+                        stroke-linecap="round"
+                        style="filter:drop-shadow(0 0 6px {{ 'var(--green)' if sec_score.score >= 80 else 'var(--yellow)' if sec_score.score >= 50 else 'var(--red)' }});"/>
+              </svg>
+              <div class="score-number" style="color:{{ 'var(--green)' if sec_score.score >= 80 else 'var(--yellow)' if sec_score.score >= 50 else 'var(--red)' }}">
+                {{ sec_score.score }}
+              </div>
+            </div>
+            <div class="score-info">
+              <div class="score-risk" style="color:{{ 'var(--green)' if sec_score.risk == 'LOW' else 'var(--yellow)' if sec_score.risk == 'MEDIUM' else 'var(--red)' }}">
+                RISK: {{ sec_score.risk }}
+              </div>
+              {% for d in sec_score.deductions %}
+              <div class="score-deduction deduction-{{ d.color }}">
+                <span>{{ d.item }}</span>
+                <span>{{ d.points }}</span>
+              </div>
+              {% endfor %}
+              {% if not sec_score.deductions %}
+              <div style="color:var(--green);font-size:0.72rem;margin-top:4px">
+                <i class="fas fa-check-circle"></i> All systems secure
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          <div class="score-bar-wrap mt-2">
+            <div class="score-bar-fill" style="width:{{ sec_score.score }}%;background:{{ 'var(--green)' if sec_score.score >= 80 else 'var(--yellow)' if sec_score.score >= 50 else 'var(--red)' }};filter:drop-shadow(0 0 4px {{ 'var(--green)' if sec_score.score >= 80 else 'var(--yellow)' if sec_score.score >= 50 else 'var(--red)' }})"></div>
+          </div>
+          <div class="mt-2 d-flex gap-2" style="justify-content:space-between">
+            <span style="font-size:0.65rem;color:var(--red)">0 HIGH RISK</span>
+            <span style="font-size:0.65rem;color:var(--yellow)">50</span>
+            <span style="font-size:0.65rem;color:var(--green)">100 SECURE</span>
+          </div>
+          <button class="btn-hacker btn-patch btn-sm-hacker mt-2 w-100" onclick="refreshScore()">
+            <i class="fas fa-sync-alt" id="score-refresh-icon"></i> REFRESH SCORE
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Security Layers -->
     <div class="col-md-4">
       <div class="hacker-panel">
         <div class="panel-header"><i class="fas fa-layer-group"></i> SECURITY LAYERS</div>
         <div class="panel-body">
           {% set layers = [
-            ('fa-lock' if secure else 'fa-unlock', 'Authentication', 'bcrypt + lockout + CSRF' if secure else 'Weak / no lockout / no CSRF'),
-            ('fa-server' if secure else 'fa-cookie', 'Access Control', 'Permission-based RBAC (server)' if secure else 'Client-side cookie role'),
-            ('fa-filter' if secure else 'fa-exclamation', 'Input Validation', 'Sanitized + parameterized SQL' if secure else 'No validation (XSS/SQLi)'),
-            ('fa-user-lock' if secure else 'fa-ghost', 'Session Security', 'IP-bound + secure cookies' if secure else 'No IP bind / weak cookies'),
-            ('fa-shield-alt' if secure else 'fa-radiation', 'CSRF Protection', 'Token validated server-side' if secure else 'No CSRF protection'),
-            ('fa-key' if secure else 'fa-unlink', 'API Security', 'JWT bearer tokens' if secure else 'Weak / no token auth')
+            ('fa-lock' if secure else 'fa-unlock', 'Authentication', 'bcrypt + lockout + CSRF' if secure else 'No lockout / No CSRF'),
+            ('fa-server' if secure else 'fa-cookie', 'Access Control', 'Server-side RBAC' if secure else 'Client cookie role'),
+            ('fa-filter' if secure else 'fa-exclamation', 'Input Validation', 'Sanitized + parameterized' if secure else 'No validation (XSS/SQLi)'),
+            ('fa-user-lock' if secure else 'fa-ghost', 'Session Security', 'IP-bound + HttpOnly' if secure else 'No IP bind / no flags'),
+            ('fa-shield-alt' if secure else 'fa-radiation', 'CSRF Protection', 'Tokens validated' if secure else 'No CSRF protection'),
+            ('fa-key' if secure else 'fa-unlink', 'API Security', 'JWT + signature check' if secure else 'Bypass tokens accepted'),
           ] %}
           {% for icon, name, desc in layers %}
           <div class="layer-item {{ 'layer-secure' if secure else 'layer-vuln' }}">
@@ -66,8 +126,64 @@
       </div>
     </div>
 
-    <!-- ACL Matrix -->
+    <!-- Attack vectors -->
     <div class="col-md-4">
+      <div class="hacker-panel">
+        <div class="panel-header"><i class="fas fa-terminal"></i> QUICK ACCESS</div>
+        <div class="panel-body">
+          {% set links = [
+            ('fa-layer-group', 'MISSION SELECT', '8 vulnerability levels', 'levels', 'action-missions'),
+            ('fa-code', 'XSS ATTACK', 'Cross-site scripting', 'xss_demo', 'action-exploit'),
+            ('fa-database', 'SQL INJECTION', 'Parameterized vs raw', 'sqli_demo', 'action-sqli'),
+            ('fa-exchange-alt', 'CSRF ATTACK', 'Forged request demo', 'csrf_demo', 'action-csrf'),
+            ('fa-lock', 'CRYPTO LAB', 'bcrypt, JWT, hashing', 'crypto_lab', 'action-crypto'),
+            ('fa-cookie-bite', 'SESSION HIJACK', 'Cookie security flags', 'session_demo', 'action-session'),
+          ] %}
+          {% for icon, title, sub, route, cls in links %}
+          <a href="{{ url_for(route) }}" class="action-card {{ cls }}">
+            <i class="fas {{ icon }} fa-lg"></i>
+            <div><div class="action-title">{{ title }}</div><div class="action-sub">{{ sub }}</div></div>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Threat feed -->
+    {% if role in ['admin', 'moderator'] and anomalies.suspicious_ips %}
+    <div class="col-md-6">
+      <div class="hacker-panel">
+        <div class="panel-header" style="color:var(--red)"><i class="fas fa-crosshairs"></i> SUSPICIOUS IPs — LAST 15 MIN</div>
+        <div class="panel-body">
+          {% for item in anomalies.suspicious_ips %}
+          <div class="threat-row">
+            <span class="threat-ip"><i class="fas fa-network-wired"></i> {{ item.ip_address }}</span>
+            <span class="threat-badge">{{ item.cnt }} failed logins</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if role in ['admin', 'moderator'] and anomalies.locked_accounts %}
+    <div class="col-md-6">
+      <div class="hacker-panel">
+        <div class="panel-header" style="color:var(--yellow)"><i class="fas fa-ban"></i> LOCKED ACCOUNTS</div>
+        <div class="panel-body">
+          {% for item in anomalies.locked_accounts %}
+          <div class="threat-row">
+            <span class="threat-ip" style="color:var(--yellow)"><i class="fas fa-user-lock"></i> {{ item.username }}</span>
+            <span class="threat-badge threat-badge-yellow">locked until {{ item.locked_until[:16] }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Permission Matrix -->
+    <div class="col-md-6">
       <div class="hacker-panel">
         <div class="panel-header"><i class="fas fa-table"></i> PERMISSION MATRIX</div>
         <div class="panel-body">
@@ -84,6 +200,7 @@
                 ('manage_users', False, False, True),
                 ('access_admin', False, False, True),
                 ('access_api', False, False, True),
+                ('access_crypto_lab', False, False, True),
               ] %}
               {% for perm, u, m, a in perm_rows %}
               <tr>
@@ -104,57 +221,11 @@
       </div>
     </div>
 
-    <!-- Attack vectors -->
-    <div class="col-md-4">
-      <div class="hacker-panel">
-        <div class="panel-header"><i class="fas fa-terminal"></i> ATTACK VECTORS</div>
-        <div class="panel-body">
-          <a href="{{ url_for('levels') }}" class="action-card action-missions">
-            <i class="fas fa-layer-group fa-2x"></i>
-            <div><div class="action-title">MISSION SELECT</div><div class="action-sub">8 vulnerability levels</div></div>
-          </a>
-          <a href="{{ url_for('xss_demo') }}" class="action-card action-exploit">
-            <i class="fas fa-code fa-2x"></i>
-            <div><div class="action-title">XSS ATTACK</div><div class="action-sub">Cross-site scripting demo</div></div>
-          </a>
-          <a href="{{ url_for('sqli_demo') }}" class="action-card action-sqli">
-            <i class="fas fa-database fa-2x"></i>
-            <div><div class="action-title">SQL INJECTION</div><div class="action-sub">Parameterized vs raw</div></div>
-          </a>
-          <a href="{{ url_for('csrf_demo') }}" class="action-card action-csrf">
-            <i class="fas fa-exchange-alt fa-2x"></i>
-            <div><div class="action-title">CSRF ATTACK</div><div class="action-sub">Forged request simulation</div></div>
-          </a>
-          <a href="{{ url_for('crypto_lab') }}" class="action-card action-crypto">
-            <i class="fas fa-lock fa-2x"></i>
-            <div><div class="action-title">CRYPTO LAB</div><div class="action-sub">bcrypt, JWT, hashing</div></div>
-          </a>
-        </div>
-      </div>
-    </div>
-
-    <!-- Live threat feed if admin/moderator -->
-    {% if role in ['admin', 'moderator'] and anomalies.suspicious_ips %}
-    <div class="col-md-6">
-      <div class="hacker-panel">
-        <div class="panel-header" style="color:var(--red)"><i class="fas fa-crosshairs"></i> SUSPICIOUS IPs (LAST 15 MIN)</div>
-        <div class="panel-body">
-          {% for item in anomalies.suspicious_ips %}
-          <div class="threat-row">
-            <span class="threat-ip"><i class="fas fa-network-wired"></i> {{ item.ip_address }}</span>
-            <span class="threat-count badge-vuln">{{ item.cnt }} attempts</span>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-    {% endif %}
-
-    <!-- System Logs -->
+    <!-- Live Logs -->
     <div class="col-12">
       <div class="hacker-panel">
         <div class="panel-header d-flex justify-content-between align-items-center">
-          <span><i class="fas fa-scroll"></i> SYSTEM LOGS</span>
+          <span><i class="fas fa-scroll"></i> LIVE SECURITY LOG STREAM</span>
           <div class="d-flex align-items-center gap-3">
             <div class="log-filter-tabs">
               <button class="log-tab active" onclick="filterLogs('all', this)">ALL</button>
@@ -174,7 +245,7 @@
             <span class="log-msg">{{ log.message }}</span>
           </div>
           {% else %}
-          <div class="log-entry log-info"><span class="log-msg">No log entries yet.</span></div>
+          <div class="log-entry log-info"><span class="log-msg">No log entries yet. Perform any action to generate logs.</span></div>
           {% endfor %}
         </div>
       </div>
@@ -201,21 +272,47 @@ function filterLogs(level, btn) {
   });
 }
 
+let currentFilter = 'all';
+document.querySelectorAll('.log-tab').forEach(btn => {
+  btn.addEventListener('click', () => { currentFilter = btn.textContent.toLowerCase(); });
+});
+
 setInterval(() => {
   fetch('/api/logs')
     .then(r => r.json())
     .then(data => {
       const panel = document.getElementById('logs-panel');
       if (!panel) return;
-      panel.innerHTML = data.map(l => `
-        <div class="log-entry log-${l.level.toLowerCase()}" data-level="${l.level.toLowerCase()}">
+      panel.innerHTML = data.map(l => {
+        const level = l.level.toLowerCase();
+        const visible = (currentFilter === 'all' || level === currentFilter) ? '' : 'display:none';
+        return `<div class="log-entry log-${level}" data-level="${level}" style="${visible}">
           <span class="log-time">${l.timestamp}</span>
           <span class="log-cat">[${l.category || 'GENERAL'}]</span>
           <span class="log-level">[${l.level}]</span>
           <span class="log-msg">${l.message}</span>
-        </div>
-      `).join('');
+        </div>`;
+      }).join('');
     });
 }, 5000);
+
+function refreshScore() {
+  const icon = document.getElementById('score-refresh-icon');
+  if (icon) icon.classList.add('fa-spin');
+  fetch('/api/security-score')
+    .then(r => r.json())
+    .then(data => {
+      if (icon) icon.classList.remove('fa-spin');
+      // Simple visual feedback — page reload would update fully
+      const circleEl = document.querySelector('circle:last-of-type');
+      if (circleEl) {
+        const newDash = (data.score / 100 * 263.9).toFixed(1);
+        circleEl.setAttribute('stroke-dasharray', `${newDash} 263.9`);
+        const scoreEl = document.querySelector('.score-number');
+        if (scoreEl) scoreEl.textContent = data.score;
+      }
+    })
+    .catch(() => { if (icon) icon.classList.remove('fa-spin'); });
+}
 </script>
 {% endblock %}

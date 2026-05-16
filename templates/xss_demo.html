@@ -5,36 +5,36 @@
 <div class="container-fluid px-4 py-3">
 
   <div class="page-header">
-    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./xss_inject --test</div>
+    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./xss_inject --test --visual</div>
     <h1 class="page-title">LEVEL 5: CROSS-SITE SCRIPTING</h1>
-    <p class="page-sub">Reflected XSS &bull; Input sanitization &bull; HTML escaping demo</p>
+    <p class="page-sub">Reflected XSS &bull; Input sanitization &bull; Live flow visualization &bull; Real payload demo</p>
   </div>
 
   <div class="mode-banner {{ 'banner-secure' if secure else 'banner-insecure' }} mb-3">
     <i class="fas {{ 'fa-shield-alt' if secure else 'fa-radiation' }}"></i>
     {% if secure %}
-      SECURE — User input is HTML-escaped before rendering. Scripts are neutralized.
+      SECURE — All user input HTML-escaped before rendering. Scripts are neutralized into safe text.
     {% else %}
-      ATTACK MODE — Raw HTML rendered directly. Script injection works!
+      ATTACK MODE — Raw HTML rendered directly in the browser. Script injection executes!
     {% endif %}
   </div>
 
   <div class="row g-3">
 
     <div class="col-md-6">
-      <div class="hacker-panel">
+      <div class="hacker-panel h-100">
         <div class="panel-header"><i class="fas fa-code"></i> XSS INJECTION TERMINAL</div>
         <div class="panel-body">
           <form method="POST" action="{{ url_for('xss_demo') }}" class="hacker-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <div class="form-group-hacker">
               <label><i class="fas fa-comment"></i> USER COMMENT INPUT</label>
-              <textarea name="comment" class="input-hacker" rows="4" placeholder="Enter a comment..."
+              <textarea name="comment" class="input-hacker" rows="4" placeholder="Enter a comment…"
                         style="resize:vertical">{{ user_input }}</textarea>
               {% if not secure %}
-              <small class="vuln-text">Try: &lt;script&gt;alert('XSS!')&lt;/script&gt;</small>
+              <small class="vuln-text"><i class="fas fa-skull"></i> Attack mode — script tags will execute! Try the payloads below.</small>
               {% else %}
-              <small class="field-hint">All HTML entities will be escaped</small>
+              <small class="field-hint"><i class="fas fa-shield-alt"></i> Secure mode — all HTML entities will be escaped</small>
               {% endif %}
             </div>
             <button type="submit" class="btn-hacker {{ 'btn-level-vuln' if not secure else 'btn-patch' }} w-100">
@@ -43,22 +43,56 @@
             </button>
           </form>
 
-          <!-- XSS payload samples -->
+          <!-- Payload samples -->
           <div class="payload-samples mt-3">
-            <div class="dim mb-1" style="font-size:0.7rem">SAMPLE PAYLOADS (click to copy):</div>
-            <code class="payload-chip" onclick="copyPayload(this)">&lt;script&gt;alert('XSS')&lt;/script&gt;</code>
-            <code class="payload-chip" onclick="copyPayload(this)">&lt;img src=x onerror=alert(1)&gt;</code>
-            <code class="payload-chip" onclick="copyPayload(this)">&lt;svg onload=alert(document.cookie)&gt;</code>
+            <div class="dim mb-1" style="font-size:0.7rem">SAMPLE PAYLOADS (click to copy to textarea):</div>
+            <code class="payload-chip" onclick="copyPayload(this)">&lt;script&gt;alert('XSS!')&lt;/script&gt;</code>
+            <code class="payload-chip" onclick="copyPayload(this)">&lt;img src=x onerror=alert(document.cookie)&gt;</code>
+            <code class="payload-chip" onclick="copyPayload(this)">&lt;svg onload=alert('XSS via SVG')&gt;</code>
+            <code class="payload-chip" onclick="copyPayload(this)">&lt;a href="javascript:alert('XSS link')"&gt;Click me&lt;/a&gt;</code>
+            <code class="payload-chip" onclick="copyPayload(this)">&lt;iframe src="javascript:alert('iframe XSS')"&gt;&lt;/iframe&gt;</code>
+          </div>
+
+          <!-- Learning -->
+          <div class="learn-panel mt-3">
+            <div class="learn-header" onclick="toggleLearn(this)"><i class="fas fa-graduation-cap"></i> XSS ATTACK TYPES <i class="fas fa-chevron-down"></i></div>
+            <div class="learn-body">
+              <p><strong>Reflected XSS:</strong> Payload in URL/form field, reflected back in same response. Server returns input unescaped. Used for phishing — attacker sends crafted URL.</p>
+              <p><strong>Stored XSS:</strong> Payload stored in database (e.g. comment field), executes for every user who views it. Most dangerous type — affects all visitors.</p>
+              <p><strong>DOM-based XSS:</strong> Payload manipulates the DOM via JavaScript without server involvement. <code>document.write(location.hash)</code> is a classic example.</p>
+              <p><strong>Real impact:</strong> British Airways (2018) — 22 lines of XSS stole 380,000 payment cards. Samy worm (2005) — spread across MySpace infecting 1M accounts in 20 hours.</p>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
     <div class="col-md-6">
-      <div class="hacker-panel">
-        <div class="panel-header"><i class="fas fa-eye"></i> RENDERED OUTPUT</div>
+      <div class="hacker-panel h-100">
+        <div class="panel-header"><i class="fas fa-eye"></i> RENDERED OUTPUT & FLOW</div>
         <div class="panel-body">
           {% if result %}
+
+          <!-- Sanitization flow steps -->
+          {% if result.steps %}
+          <div class="mb-3">
+            <div class="dim mb-1" style="font-size:0.7rem"><i class="fas fa-list"></i> PROCESSING FLOW:</div>
+            <div class="flow-steps">
+              {% for step in result.steps %}
+              <div class="flow-step {{ 'flow-success' if secure else 'flow-danger' if loop.last else 'flow-warning' }}" style="margin-bottom:3px">
+                <div class="flow-step-num">{{ loop.index }}</div>
+                <div class="flow-step-body">
+                  <div class="flow-step-detail" style="font-size:0.7rem">{{ step }}</div>
+                </div>
+                <div class="flow-step-icon">
+                  <i class="fas {{ 'fa-check-circle' if secure else 'fa-skull' if loop.last else 'fa-exclamation-triangle' }}"></i>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
           <div class="result-box result-{{ result.color }} mb-3">
             <div class="result-status">{{ result.status }}</div>
           </div>
@@ -69,7 +103,7 @@
               <code class="output-val">{{ result.raw }}</code>
             </div>
             <div class="output-row mt-2">
-              <div class="output-label dim">RENDERED ({{ 'ESCAPED' if secure else 'RAW HTML' }}):</div>
+              <div class="output-label dim">RENDERED ({{ 'ESCAPED — SAFE' if secure else 'RAW HTML — DANGEROUS' }}):</div>
               <div class="rendered-output {{ 'rendered-safe' if secure else 'rendered-danger' }}">
                 {% if secure %}
                   {{ result.rendered }}
@@ -80,53 +114,58 @@
             </div>
           </div>
 
-          {% if not secure and '<script' in result.raw %}
+          {% if not secure and result.has_payload %}
           <div class="vuln-box mt-3">
-            <span class="vuln-label"><i class="fas fa-skull"></i> SCRIPT EXECUTED!</span>
-            <p style="font-size:0.75rem">In a real app, this script would run in the victim's browser with access to their cookies, session tokens, and DOM.</p>
+            <span class="vuln-label"><i class="fas fa-skull"></i> SCRIPT INJECTED!</span>
+            <p style="font-size:0.75rem">This script now runs in the victim's browser with access to:</p>
+            <ul style="font-size:0.72rem;color:var(--text-dim);padding-left:1rem">
+              <li>All cookies not marked HttpOnly</li>
+              <li>Full page DOM and form data</li>
+              <li>LocalStorage and SessionStorage</li>
+              <li>Can make requests as the victim</li>
+            </ul>
+          </div>
+          {% endif %}
+
+          {% if secure and result.has_payload %}
+          <div class="secure-box mt-3">
+            <span class="secure-label"><i class="fas fa-shield-alt"></i> PAYLOAD NEUTRALIZED</span>
+            <p style="font-size:0.75rem">The script was escaped to harmless text. <code>&lt;</code> becomes <code>&amp;lt;</code> — browser displays it, does not execute it.</p>
           </div>
           {% endif %}
 
           {% else %}
           <div class="no-threat" style="padding:2rem;text-align:center">
             <i class="fas fa-terminal fa-2x mb-2"></i>
-            <div>Submit a payload to see the output</div>
+            <div>Submit a payload to see the output and flow visualization</div>
           </div>
           {% endif %}
         </div>
       </div>
     </div>
 
-    <!-- How XSS works -->
+    <!-- Defenses -->
     <div class="col-12">
       <div class="hacker-panel">
-        <div class="panel-header"><i class="fas fa-info-circle"></i> XSS ATTACK TYPES & DEFENSES</div>
+        <div class="panel-header"><i class="fas fa-info-circle"></i> XSS DEFENSES</div>
         <div class="panel-body">
           <div class="row g-3">
             <div class="col-md-4">
-              <div class="info-card">
-                <div class="info-card-title" style="color:var(--red)"><i class="fas fa-bolt"></i> REFLECTED XSS</div>
-                <p>Payload in URL/form, reflected back immediately. No persistence. Used for phishing attacks.</p>
-                <code>&lt;a href="?q=&lt;script&gt;...&lt;/script&gt;"&gt;Click me&lt;/a&gt;</code>
+              <div class="secure-box">
+                <span class="secure-label"><i class="fas fa-code"></i> HTML ESCAPING</span>
+                <p style="font-size:0.75rem;margin-top:6px">Convert special chars: <code>&lt;</code>→<code>&amp;lt;</code>, <code>&gt;</code>→<code>&amp;gt;</code>, etc. Jinja2 does this automatically with <code>{{ '{{ var }}' }}</code> — use <code>| safe</code> only for trusted HTML.</p>
               </div>
             </div>
             <div class="col-md-4">
-              <div class="info-card">
-                <div class="info-card-title" style="color:var(--red)"><i class="fas fa-database"></i> STORED XSS</div>
-                <p>Payload stored in database, executed when any user views the infected content. Most dangerous.</p>
-                <code>Comment: &lt;script&gt;stealCookies()&lt;/script&gt;</code>
+              <div class="secure-box">
+                <span class="secure-label"><i class="fas fa-shield-alt"></i> CONTENT SECURITY POLICY</span>
+                <p style="font-size:0.75rem;margin-top:6px">HTTP header that tells browser which scripts are allowed: <code>Content-Security-Policy: script-src 'self'</code> — blocks inline scripts and external sources entirely.</p>
               </div>
             </div>
             <div class="col-md-4">
-              <div class="info-card">
-                <div class="info-card-title" style="color:var(--green)"><i class="fas fa-shield-alt"></i> DEFENSES</div>
-                <ul class="concept-list mt-1">
-                  <li>HTML-escape all user output</li>
-                  <li>Content Security Policy (CSP)</li>
-                  <li>HttpOnly cookies (JS can't read)</li>
-                  <li>Input validation & whitelist</li>
-                  <li>Use template auto-escaping</li>
-                </ul>
+              <div class="secure-box">
+                <span class="secure-label"><i class="fas fa-cookie"></i> HTTPONLY COOKIES</span>
+                <p style="font-size:0.75rem;margin-top:6px">Even if XSS executes, <code>HttpOnly</code> prevents <code>document.cookie</code> from reading session tokens. This cuts off the most common XSS goal — session theft.</p>
               </div>
             </div>
           </div>
@@ -144,9 +183,23 @@ function copyPayload(el) {
   const textarea = document.querySelector('textarea[name="comment"]');
   if (textarea) {
     textarea.value = el.textContent;
-    el.style.borderColor = 'var(--green)';
+    el.style.borderColor = 'var(--red)';
     setTimeout(() => el.style.borderColor = '', 500);
   }
 }
+function toggleLearn(header) {
+  const body = header.nextElementSibling;
+  const icon = header.querySelector('.fa-chevron-down, .fa-chevron-up');
+  if (!body.style.display || body.style.display === 'none') {
+    body.style.display = '';
+    if (icon) { icon.classList.replace('fa-chevron-down','fa-chevron-up'); }
+  } else {
+    body.style.display = 'none';
+    if (icon) { icon.classList.replace('fa-chevron-up','fa-chevron-down'); }
+  }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.learn-body').forEach(el => el.style.display = 'none');
+});
 </script>
 {% endblock %}

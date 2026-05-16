@@ -5,81 +5,267 @@
 <div class="container-fluid px-4 py-3">
 
   <div class="page-header">
-    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./cryptolab --analyze</div>
+    <div class="terminal-title"><span class="prompt">root@hvs:~$</span> ./cryptolab --interactive</div>
     <h1 class="page-title">CRYPTOGRAPHY LAB</h1>
-    <p class="page-sub">Hash analysis &bull; Digital signatures &bull; JWT tokens &bull; Encryption vs Hashing</p>
+    <p class="page-sub">Hash analysis &bull; Caesar cipher &bull; Base64 &bull; JWT &bull; Password strength &bull; Rainbow tables</p>
   </div>
 
-  <!-- Input -->
-  <div class="row g-3 mt-1">
-    <div class="col-12">
-      <div class="hacker-panel">
-        <div class="panel-header"><i class="fas fa-keyboard"></i> INPUT ANALYZER</div>
-        <div class="panel-body">
-          <form method="GET" action="{{ url_for('crypto_lab') }}" class="d-flex gap-2 align-items-end">
-            <div class="form-group-hacker flex-grow-1">
-              <label><i class="fas fa-font"></i> PLAINTEXT INPUT</label>
-              <input type="text" name="sample" class="input-hacker" value="{{ sample }}" placeholder="Enter text to analyze" maxlength="64"/>
-            </div>
-            <button type="submit" class="btn-hacker btn-access">
-              <i class="fas fa-search"></i> ANALYZE
-            </button>
-          </form>
+  <!-- Interactive Input -->
+  <div class="hacker-panel mb-3">
+    <div class="panel-header"><i class="fas fa-keyboard"></i> INTERACTIVE INPUT — all results update from this value</div>
+    <div class="panel-body">
+      <form method="GET" action="{{ url_for('crypto_lab') }}" class="d-flex gap-2 align-items-end flex-wrap">
+        <div class="form-group-hacker flex-grow-1">
+          <label><i class="fas fa-font"></i> PLAINTEXT INPUT (max 64 chars)</label>
+          <input type="text" name="sample" id="live-input" class="input-hacker" value="{{ sample }}"
+                 placeholder="Enter text to analyze…" maxlength="64" autocomplete="off"/>
         </div>
-      </div>
+        <div class="form-group-hacker" style="min-width:120px">
+          <label><i class="fas fa-redo"></i> CAESAR SHIFT</label>
+          <input type="number" name="shift" class="input-hacker" value="{{ caesar_shift }}" min="1" max="25" style="width:80px"/>
+        </div>
+        <button type="submit" class="btn-hacker btn-access">
+          <i class="fas fa-search"></i> ANALYZE
+        </button>
+      </form>
     </div>
   </div>
 
-  <div class="row g-3 mt-1">
+  <div class="row g-3">
 
-    <!-- Hash comparison -->
+    <!-- Password Strength Meter -->
     <div class="col-md-6">
-      <div class="hacker-panel">
+      <div class="hacker-panel h-100">
+        <div class="panel-header"><i class="fas fa-tachometer-alt"></i> PASSWORD STRENGTH ANALYZER</div>
+        <div class="panel-body">
+          <div class="strength-display">
+            <div class="strength-score-big {{ 'score-strong' if pw_score >= 3 else 'score-medium' if pw_score == 2 else 'score-weak' }}">
+              {{ pw_score }}/4
+            </div>
+            <div class="strength-label-big {{ 'color-green' if pw_score >= 3 else 'color-yellow' if pw_score == 2 else 'color-red' }}">
+              {{ pw_label }}
+            </div>
+          </div>
+          <div class="strength-bar-full mt-2">
+            <div class="strength-fill" style="width:{{ pw_score * 25 }}%;background:{{ 'var(--green)' if pw_score >= 3 else 'var(--yellow)' if pw_score == 2 else 'var(--red)' }}"></div>
+          </div>
+          <div class="mt-2 d-flex gap-2" style="flex-wrap:wrap">
+            {% for check in ['8+ chars','Uppercase','Number','Special char'] %}
+            {% set passed = loop.index0 < (4 - pw_feedback|length) %}
+            <div class="check-chip {{ 'chip-pass' if loop.index0 < pw_score else 'chip-fail' }}">
+              <i class="fas {{ 'fa-check' if loop.index0 < pw_score else 'fa-times' }}"></i> {{ check }}
+            </div>
+            {% endfor %}
+          </div>
+          {% if pw_feedback %}
+          <div class="mt-2">
+            {% for hint in pw_feedback %}
+            <div style="font-size:0.72rem;color:var(--yellow);margin-bottom:2px"><i class="fas fa-arrow-right"></i> {{ hint }}</div>
+            {% endfor %}
+          </div>
+          {% endif %}
+          <div class="mt-2" style="font-size:0.72rem;color:var(--text-dim)">
+            <i class="fas fa-calculator"></i> Entropy estimate: <span style="color:var(--cyan)">{{ pw_entropy }} bits</span>
+          </div>
+
+          <!-- Learning panel -->
+          <div class="learn-panel mt-2">
+            <div class="learn-header" onclick="toggleLearn(this)"><i class="fas fa-graduation-cap"></i> WHY DOES PASSWORD STRENGTH MATTER? <i class="fas fa-chevron-down"></i></div>
+            <div class="learn-body">
+              <p><strong>What is happening:</strong> We check 4 criteria: length, uppercase, numbers, special chars. Each adds entropy — the unpredictability of the password.</p>
+              <p><strong>Why dangerous:</strong> Weak passwords are cracked in seconds using dictionary or brute-force attacks. MD5 of "password" is cracked instantly via rainbow tables.</p>
+              <p><strong>Real-world impact:</strong> 81% of data breaches involve weak or stolen passwords (Verizon DBIR). A 6-char lowercase password has only 308 million combinations — cracked in &lt;1 second by modern GPUs.</p>
+              <p><strong>Best practice:</strong> Use a passphrase of 4+ random words, or a password manager generating 20+ char random strings.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hash Comparison -->
+    <div class="col-md-6">
+      <div class="hacker-panel h-100">
         <div class="panel-header"><i class="fas fa-fingerprint"></i> HASH ALGORITHM COMPARISON</div>
         <div class="panel-body">
-          <div class="crypto-algo-row">
+          {% set algos = [
+            ('MD5',    'algo-danger',  'risk-critical', 'BROKEN — DO NOT USE',        '128-bit, collision attacks known, rainbow tables exist',  md5,      'Very fast (bad for passwords)'),
+            ('SHA-1',  'algo-danger',  'risk-critical', 'BROKEN — COLLISION FOUND',   'SHAttered attack found collisions (2017), deprecated',    sha1,     'Fast — GPU acceleratable'),
+            ('SHA-256','algo-warning', 'risk-medium',   'ACCEPTABLE (not passwords)', '256-bit, no collisions, but too fast for password use',   sha256,   'Fast — GPU brute-forceable'),
+            ('bcrypt', 'algo-secure',  'risk-secure',   'RECOMMENDED for passwords',  'Adaptive cost, built-in random salt, GPU-resistant design',bcrypt_hash,'~100ms intentional slowness'),
+          ] %}
+          {% for name, nc, rc, risk, desc, hash_val, meta in algos %}
+          <div class="crypto-algo-row {{ 'mb-2' if not loop.last }}">
             <div class="algo-header">
-              <span class="algo-name algo-danger">MD5</span>
-              <span class="algo-risk risk-critical">BROKEN — DO NOT USE</span>
+              <span class="algo-name {{ nc }}">{{ name }}</span>
+              <span class="algo-risk {{ rc }}">{{ risk }}</span>
             </div>
-            <div class="algo-desc">128-bit, collision attacks known, rainbow tables available</div>
-            <div class="algo-hash">{{ md5 }}</div>
-            <div class="algo-meta">Length: 32 hex chars &bull; Speed: Very fast (vulnerability)</div>
+            <div class="algo-desc">{{ desc }}</div>
+            <div class="algo-hash">{{ hash_val }}</div>
+            <div class="algo-meta">{{ meta }}</div>
+          </div>
+          {% endfor %}
+
+          {% if rainbow_match %}
+          <div class="vuln-box mt-2">
+            <span class="vuln-label"><i class="fas fa-table"></i> RAINBOW TABLE MATCH FOUND!</span>
+            <div style="font-size:0.75rem;margin-top:4px">Input "<code>{{ sample }}</code>" matches rainbow table entry — instantly crackable!</div>
+          </div>
+          {% endif %}
+
+          <div class="learn-panel mt-2">
+            <div class="learn-header" onclick="toggleLearn(this)"><i class="fas fa-graduation-cap"></i> HASHING vs ENCRYPTION <i class="fas fa-chevron-down"></i></div>
+            <div class="learn-body">
+              <p><strong>Hashing</strong> is one-way — you cannot reverse it. Used for passwords. bcrypt is slow by design to resist brute force.</p>
+              <p><strong>Encryption</strong> is two-way — reversible with a key. Used for data at rest/transit (AES, RSA, TLS).</p>
+              <p><strong>Why bcrypt over SHA-256?</strong> SHA-256 hashes 10 billion passwords/second on a GPU. bcrypt limits to ~100/second due to its work factor.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Caesar Cipher -->
+    <div class="col-md-6">
+      <div class="hacker-panel h-100">
+        <div class="panel-header"><i class="fas fa-font"></i> CAESAR CIPHER (ROT-{{ caesar_shift }})</div>
+        <div class="panel-body">
+          <div class="cipher-flow">
+            <div class="cipher-row">
+              <span class="cipher-label">PLAINTEXT</span>
+              <code class="cipher-val" style="color:var(--cyan)">{{ sample }}</code>
+            </div>
+            <div class="cipher-arrow"><i class="fas fa-arrow-down"></i> shift +{{ caesar_shift }} (mod 26)</div>
+            <div class="cipher-row">
+              <span class="cipher-label">ENCRYPTED</span>
+              <code class="cipher-val" style="color:var(--yellow)">{{ caesar_encrypted }}</code>
+            </div>
+            <div class="cipher-arrow"><i class="fas fa-arrow-down"></i> shift -{{ caesar_shift }}</div>
+            <div class="cipher-row">
+              <span class="cipher-label">DECRYPTED</span>
+              <code class="cipher-val" style="color:var(--green)">{{ caesar_decrypted }}</code>
+            </div>
           </div>
 
-          <div class="crypto-algo-row mt-2">
-            <div class="algo-header">
-              <span class="algo-name algo-warning">SHA-256</span>
-              <span class="algo-risk risk-medium">ACCEPTABLE (but not for passwords)</span>
+          {% if caesar_steps %}
+          <div class="mt-2">
+            <div class="dim mb-1" style="font-size:0.7rem">STEP-BY-STEP (first 8 chars):</div>
+            <div class="steps-grid">
+              {% for step in caesar_steps %}
+              <div class="step-cell">
+                <span class="step-orig">{{ step.char }}</span>
+                <span class="step-arrow">→</span>
+                <span class="step-num">pos {{ step.pos }}</span>
+                <span class="step-arrow">+{{ step.shift }}</span>
+                <span class="step-result">{{ step.result }}</span>
+              </div>
+              {% endfor %}
             </div>
-            <div class="algo-desc">256-bit, no known collisions, but fast = GPU brute-forceable</div>
-            <div class="algo-hash">{{ sha256 }}</div>
-            <div class="algo-meta">Length: 64 hex chars &bull; Speed: Fast (bad for passwords)</div>
+          </div>
+          {% endif %}
+
+          <div class="learn-panel mt-2">
+            <div class="learn-header" onclick="toggleLearn(this)"><i class="fas fa-graduation-cap"></i> WHY CAESAR CIPHER IS BROKEN <i class="fas fa-chevron-down"></i></div>
+            <div class="learn-body">
+              <p><strong>What is happening:</strong> Each letter shifts by a fixed number in the alphabet (A→D for shift 3). ROT-13 is a special case with shift 13.</p>
+              <p><strong>Why dangerous:</strong> Only 25 possible shifts — brute force takes &lt;1 second. Frequency analysis (letter 'e' is most common in English) breaks it without knowing the key.</p>
+              <p><strong>Real-world impact:</strong> ROT-13 is still used as "obscurity" in some contexts — completely broken. Modern ciphers (AES-256) use 2^256 possible keys.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Base64 -->
+    <div class="col-md-6">
+      <div class="hacker-panel h-100">
+        <div class="panel-header"><i class="fas fa-code"></i> BASE64 ENCODING / DECODING</div>
+        <div class="panel-body">
+          <div class="cipher-flow">
+            <div class="cipher-row">
+              <span class="cipher-label">INPUT</span>
+              <code class="cipher-val" style="color:var(--cyan)">{{ sample }}</code>
+            </div>
+            <div class="cipher-arrow"><i class="fas fa-arrow-down"></i> base64.encode()</div>
+            <div class="cipher-row">
+              <span class="cipher-label">ENCODED</span>
+              <code class="cipher-val" style="color:var(--yellow);word-break:break-all">{{ b64_encoded }}</code>
+            </div>
           </div>
 
-          <div class="crypto-algo-row mt-2">
-            <div class="algo-header">
-              <span class="algo-name algo-warning">SHA-512</span>
-              <span class="algo-risk risk-medium">ACCEPTABLE (but not for passwords)</span>
-            </div>
-            <div class="algo-desc">512-bit output, stronger than SHA-256 but still fast</div>
-            <div class="algo-hash" style="font-size:0.6rem">{{ sha512 }}</div>
-            <div class="algo-meta">Length: 128 hex chars &bull; Still GPU-acceleratable</div>
+          <div class="b64-note mt-2">
+            <i class="fas fa-exclamation-triangle" style="color:var(--red)"></i>
+            <strong style="color:var(--red)">Base64 is NOT encryption!</strong> It is encoding only — trivially reversible by anyone.
           </div>
 
-          <div class="crypto-algo-row mt-2">
-            <div class="algo-header">
-              <span class="algo-name algo-secure">bcrypt</span>
-              <span class="algo-risk risk-secure">RECOMMENDED for passwords</span>
+          <!-- Interactive Base64 tester -->
+          <div class="mt-3">
+            <div class="dim mb-1" style="font-size:0.7rem">LIVE BASE64 TESTER:</div>
+            <input type="text" id="b64-input" class="input-hacker" placeholder="Enter text or base64…" style="margin-bottom:6px"/>
+            <div class="d-flex gap-2">
+              <button class="btn-hacker btn-patch btn-sm-hacker" onclick="doB64('encode')"><i class="fas fa-lock"></i> ENCODE</button>
+              <button class="btn-hacker btn-danger-hacker btn-sm-hacker" onclick="doB64('decode')"><i class="fas fa-unlock"></i> DECODE</button>
             </div>
-            <div class="algo-desc">Adaptive cost factor, built-in salt, GPU-resistant</div>
-            <div class="algo-hash">{{ bcrypt_hash }}</div>
-            <div class="algo-meta">Cost factor: 10 &bull; Built-in salt embedded &bull; Time: ~100ms</div>
+            <div id="b64-result" class="mt-2" style="display:none">
+              <div class="dim" style="font-size:0.7rem">RESULT:</div>
+              <code id="b64-output" style="color:var(--cyan);word-break:break-all;font-size:0.75rem"></code>
+            </div>
           </div>
 
-          <div class="crypto-comparison-note mt-3">
-            <i class="fas fa-info-circle"></i>
-            <strong>Key principle:</strong> Hashing is one-way (irreversible). Each bcrypt hash of the same input is <em>different</em> due to random salting — yet all verify correctly.
+          <div class="learn-panel mt-2">
+            <div class="learn-header" onclick="toggleLearn(this)"><i class="fas fa-graduation-cap"></i> BASE64 IN SECURITY CONTEXT <i class="fas fa-chevron-down"></i></div>
+            <div class="learn-body">
+              <p><strong>What is it:</strong> Base64 converts binary data to printable ASCII using 64 characters. Adds ~33% size. Used in JWT headers/payloads, email attachments, data URIs.</p>
+              <p><strong>JWT uses Base64URL:</strong> The first two parts of a JWT are Base64URL-encoded (not encrypted). Anyone can decode and read the payload — the signature only verifies integrity.</p>
+              <p><strong>Common mistake:</strong> Storing secrets or sensitive data in Base64 thinking it's encrypted. It is not — decode with one command.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rainbow Table Demo -->
+    <div class="col-md-6">
+      <div class="hacker-panel h-100">
+        <div class="panel-header"><i class="fas fa-table"></i> RAINBOW TABLE DEMO — Pre-computed Hash Lookup</div>
+        <div class="panel-body">
+          <p style="font-size:0.75rem;color:var(--text-dim);margin-bottom:0.5rem">
+            Rainbow tables store pre-computed hashes for millions of common passwords. Lookup is instant vs brute-force.
+          </p>
+          <table class="acl-table w-100 mb-2">
+            <thead>
+              <tr><th>PASSWORD</th><th>MD5</th><th>SHA-256 (first 16)</th><th>IN TABLE</th></tr>
+            </thead>
+            <tbody>
+              {% for entry in rainbow_table %}
+              <tr>
+                <td><code style="color:var(--red)">{{ entry.password }}</code></td>
+                <td style="font-size:0.6rem;color:var(--text-dim)">{{ entry.md5[:12] }}…</td>
+                <td style="font-size:0.6rem;color:var(--text-dim)">{{ entry.sha256[:16] }}…</td>
+                <td><span class="acl-deny">✓ CRACKABLE</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+
+          {% if rainbow_match %}
+          <div class="vuln-box">
+            <span class="vuln-label"><i class="fas fa-skull"></i> YOUR INPUT MATCHES: "{{ rainbow_match }}"</span>
+            <div style="font-size:0.75rem;margin-top:4px">Hash of "{{ sample }}" found in rainbow table — password cracked instantly!</div>
+          </div>
+          {% else %}
+          <div class="secure-box">
+            <span class="secure-label"><i class="fas fa-shield-alt"></i> NOT IN RAINBOW TABLE</span>
+            <div style="font-size:0.75rem;margin-top:4px">Your input is not in this demo table — but larger tables (100GB+) cover billions of passwords.</div>
+          </div>
+          {% endif %}
+
+          <div class="learn-panel mt-2">
+            <div class="learn-header" onclick="toggleLearn(this)"><i class="fas fa-graduation-cap"></i> HOW SALTING DEFEATS RAINBOW TABLES <i class="fas fa-chevron-down"></i></div>
+            <div class="learn-body">
+              <p><strong>The problem:</strong> Same input always produces same MD5/SHA hash. Pre-compute all common passwords once → crack any database instantly.</p>
+              <p><strong>The fix — Salting:</strong> Add a random value (salt) before hashing. <code>hash(salt + password)</code> — every hash is unique even for identical passwords. Rainbow tables become useless.</p>
+              <p><strong>bcrypt automatically salts:</strong> The random salt is embedded in the hash string itself (the <code>$2b$10$[22 chars]</code> prefix). This is why two bcrypt hashes of "admin123" look completely different.</p>
+            </div>
           </div>
         </div>
       </div>
@@ -87,125 +273,38 @@
 
     <!-- JWT -->
     <div class="col-md-6">
-      <div class="hacker-panel">
-        <div class="panel-header"><i class="fas fa-id-card"></i> JWT TOKEN DEMONSTRATION</div>
+      <div class="hacker-panel h-100">
+        <div class="panel-header"><i class="fas fa-id-card"></i> JWT TOKEN — Live Breakdown</div>
         <div class="panel-body">
           <div class="jwt-explainer">
             <div class="jwt-part jwt-header-part">
-              <div class="jwt-part-label">HEADER (algorithm)</div>
-              <code class="jwt-part-val">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9</code>
+              <div class="jwt-part-label">① HEADER — algorithm &amp; type</div>
+              <code class="jwt-part-val">{{ jwt_token.split('.')[0] if '.' in jwt_token else jwt_token }}</code>
+              <div style="font-size:0.65rem;color:var(--text-dim);margin-top:3px">Decoded: {"alg":"HS256","typ":"JWT"}</div>
             </div>
             <div class="jwt-dot">.</div>
             <div class="jwt-part jwt-payload-part">
-              <div class="jwt-part-label">PAYLOAD (claims)</div>
-              <code class="jwt-part-val">{{ jwt_token.split('.')[1] if '.' in jwt_token else jwt_token }}</code>
+              <div class="jwt-part-label">② PAYLOAD — claims (sub, role, exp)</div>
+              <code class="jwt-part-val">{{ jwt_token.split('.')[1] if '.' in jwt_token else '' }}</code>
+              <div style="font-size:0.65rem;color:var(--text-dim);margin-top:3px">Base64URL decoded → visible to anyone!</div>
             </div>
             <div class="jwt-dot">.</div>
             <div class="jwt-part jwt-sig-part">
-              <div class="jwt-part-label">SIGNATURE (HMAC-SHA256)</div>
+              <div class="jwt-part-label">③ SIGNATURE — HMAC-SHA256(header.payload, secret)</div>
               <code class="jwt-part-val">{{ jwt_token.split('.')[2] if jwt_token.count('.') >= 2 else '...' }}</code>
+              <div style="font-size:0.65rem;color:var(--text-dim);margin-top:3px">Tamper any part → signature invalid → rejected</div>
             </div>
           </div>
 
-          <div class="jwt-payload-display mt-3">
+          <div class="jwt-payload-display mt-2">
             <div class="dim mb-1" style="font-size:0.72rem">DECODED PAYLOAD:</div>
             <pre class="jwt-pre">{{ jwt_payload }}</pre>
           </div>
 
-          <div class="jwt-notes mt-3">
-            <div class="jwt-note jwt-note-warn">
-              <i class="fas fa-eye"></i> JWT payload is Base64-encoded, <strong>not encrypted</strong> — visible to anyone
-            </div>
-            <div class="jwt-note jwt-note-secure mt-1">
-              <i class="fas fa-shield-alt"></i> Signature verifies integrity — tampering invalidates the token
-            </div>
-            <div class="jwt-note jwt-note-warn mt-1">
-              <i class="fas fa-clock"></i> Contains expiry (<code>exp</code>) — tokens auto-expire in 1 hour
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Encryption vs Hashing -->
-    <div class="col-md-6">
-      <div class="hacker-panel">
-        <div class="panel-header"><i class="fas fa-exchange-alt"></i> ENCRYPTION VS HASHING</div>
-        <div class="panel-body">
-          <div class="row g-2">
-            <div class="col-6">
-              <div class="concept-card concept-hash">
-                <div class="concept-icon"><i class="fas fa-fingerprint"></i></div>
-                <div class="concept-title">HASHING</div>
-                <ul class="concept-list">
-                  <li>One-way — irreversible</li>
-                  <li>Fixed output length</li>
-                  <li>Same input → same hash</li>
-                  <li>Used for: passwords, checksums</li>
-                  <li>bcrypt, SHA-256, Argon2</li>
-                </ul>
-                <div class="concept-example">
-                  <code>password → $2b$10$...</code>
-                </div>
-              </div>
-            </div>
-            <div class="col-6">
-              <div class="concept-card concept-encrypt">
-                <div class="concept-icon"><i class="fas fa-lock"></i></div>
-                <div class="concept-title">ENCRYPTION</div>
-                <ul class="concept-list">
-                  <li>Two-way — reversible</li>
-                  <li>Variable output length</li>
-                  <li>Requires a key</li>
-                  <li>Used for: data at rest/transit</li>
-                  <li>AES-256, RSA, TLS</li>
-                </ul>
-                <div class="concept-example">
-                  <code>plaintext + key → ciphertext</code>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Digital signature demo -->
-    <div class="col-md-6">
-      <div class="hacker-panel">
-        <div class="panel-header"><i class="fas fa-signature"></i> DIGITAL SIGNATURE CONCEPT</div>
-        <div class="panel-body">
-          <div class="sig-flow">
-            <div class="sig-step">
-              <div class="sig-num">1</div>
-              <div class="sig-detail">
-                <div class="sig-title">HASH THE MESSAGE</div>
-                <div class="sig-desc">SHA-256(<code>"{{ sample }}"</code>)</div>
-                <code class="sig-val">{{ sha256[:32] }}...</code>
-              </div>
-            </div>
-            <div class="sig-arrow"><i class="fas fa-arrow-down"></i></div>
-            <div class="sig-step">
-              <div class="sig-num">2</div>
-              <div class="sig-detail">
-                <div class="sig-title">SIGN WITH PRIVATE KEY</div>
-                <div class="sig-desc">RSA/ECDSA(hash, privateKey)</div>
-                <code class="sig-val">→ digital signature bytes</code>
-              </div>
-            </div>
-            <div class="sig-arrow"><i class="fas fa-arrow-down"></i></div>
-            <div class="sig-step">
-              <div class="sig-num">3</div>
-              <div class="sig-detail">
-                <div class="sig-title">VERIFY WITH PUBLIC KEY</div>
-                <div class="sig-desc">verify(sig, hash, publicKey)</div>
-                <code class="sig-val sig-ok">→ TRUE — message authentic</code>
-              </div>
-            </div>
-          </div>
-          <div class="crypto-comparison-note mt-3">
-            <i class="fas fa-info-circle"></i>
-            Digital signatures prove <strong>authenticity</strong> (who signed it) and <strong>integrity</strong> (not tampered). JWT uses HMAC-SHA256 as a symmetric signature.
+          <div class="jwt-notes mt-2">
+            <div class="jwt-note jwt-note-warn"><i class="fas fa-eye"></i> Payload is visible — never store secrets in JWT!</div>
+            <div class="jwt-note jwt-note-secure mt-1"><i class="fas fa-shield-alt"></i> Signature prevents tampering — changing role in payload breaks sig</div>
+            <div class="jwt-note jwt-note-warn mt-1"><i class="fas fa-clock"></i> Token expires in 1 hour — check the <code>exp</code> claim</div>
           </div>
         </div>
       </div>
@@ -213,4 +312,40 @@
 
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function doB64(op) {
+  const input = document.getElementById('b64-input').value;
+  const result = document.getElementById('b64-result');
+  const output = document.getElementById('b64-output');
+  fetch('/api/crypto', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({op: 'base64_' + op, text: input})
+  })
+  .then(r => r.json())
+  .then(data => {
+    result.style.display = '';
+    output.textContent = data.result || data.error;
+  });
+}
+
+function toggleLearn(header) {
+  const body = header.nextElementSibling;
+  const icon = header.querySelector('.fa-chevron-down, .fa-chevron-up');
+  if (body.style.display === 'none' || !body.style.display) {
+    body.style.display = '';
+    if (icon) { icon.classList.remove('fa-chevron-down'); icon.classList.add('fa-chevron-up'); }
+  } else {
+    body.style.display = 'none';
+    if (icon) { icon.classList.remove('fa-chevron-up'); icon.classList.add('fa-chevron-down'); }
+  }
+}
+// Start all learn panels collapsed
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.learn-body').forEach(el => el.style.display = 'none');
+});
+</script>
 {% endblock %}

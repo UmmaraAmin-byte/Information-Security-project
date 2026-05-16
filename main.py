@@ -5,6 +5,7 @@ import hashlib
 import secrets
 import html
 import json
+import base64
 import jwt
 import bcrypt
 from datetime import datetime, timedelta
@@ -21,8 +22,6 @@ app.permanent_session_lifetime = timedelta(minutes=30)
 DATABASE = 'hacker_vs_system.db'
 JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
 
-# ─────────────────────────── Role & Permission System ──────────────────────
-
 ROLE_HIERARCHY = {'guest': 0, 'user': 1, 'moderator': 2, 'admin': 3}
 
 ROLE_PERMISSIONS = {
@@ -34,7 +33,7 @@ ROLE_PERMISSIONS = {
                   'access_admin', 'access_api', 'access_crypto_lab']
 }
 
-MAX_FAILED_ATTEMPTS = 5
+MAX_FAILED_ATTEMPTS = 3
 LOCKOUT_MINUTES = 15
 
 # ─────────────────────────── Database helpers ──────────────────────────────
@@ -99,18 +98,25 @@ def init_db():
                 timestamp  DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS session_events (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                username   TEXT,
+                event_type TEXT,
+                ip_address TEXT,
+                detail     TEXT,
+                timestamp  DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
-        # Seed admin
         existing = db.execute("SELECT id FROM users WHERE username='admin'").fetchone()
         if not existing:
             pw = bcrypt.hashpw('admin123'.encode(), bcrypt.gensalt()).decode()
             db.execute("INSERT INTO users (username, password, role) VALUES (?,?,?)",
                        ('admin', pw, 'admin'))
-            # Moderator
             pw_mod = bcrypt.hashpw('mod123'.encode(), bcrypt.gensalt()).decode()
             db.execute("INSERT INTO users (username, password, role) VALUES (?,?,?)",
                        ('moderator', pw_mod, 'moderator'))
-            # Demo user
             pw_demo = bcrypt.hashpw('demo123'.encode(), bcrypt.gensalt()).decode()
             db.execute("INSERT INTO users (username, password, role) VALUES (?,?,?)",
                        ('demo', pw_demo, 'user'))
@@ -132,6 +138,22 @@ def add_log(message, level='INFO', category='GENERAL', username=None, ip=None):
         db.execute(
             "INSERT INTO logs (message, level, category, ip_address, username) VALUES (?,?,?,?,?)",
             (message, level, category, ip, username)
+        )
+        db.commit()
+    except Exception:
+        pass
+
+def add_session_event(username, event_type, detail='', ip=None):
+    try:
+        if ip is None:
+            try:
+                ip = request.remote_addr
+            except RuntimeError:
+                ip = None
+        db = get_db()
+        db.execute(
+            "INSERT INTO session_events (username, event_type, ip_address, detail) VALUES (?,?,?,?)",
+            (username, event_type, ip, detail)
         )
         db.commit()
     except Exception:
@@ -188,16 +210,43 @@ def permission_required(permission):
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
+        secure = session.get('secure_mode', False)
+
         if not token:
-            return jsonify({'error': 'Token required'}), 401
+            if not secure:
+                add_log('[INSECURE] API accessed with NO token — allowed in attack mode', 'DANGER', 'API')
+                g.token_user = {'sub': 'anonymous', 'role': 'none', 'insecure': True,
+                                 'note': 'No token required in insecure mode'}
+                return f(*args, **kwargs)
+            return jsonify({'error': 'Token required', 'hint': 'Include Authorization: Bearer <token>'}), 401
+
+        if not secure:
+            # Insecure mode: accept any token, no signature verification
+            HARDCODED_BYPASS = ['admin', 'password', '00000000', 'bypass', 'token', 'secret']
+            if token in HARDCODED_BYPASS:
+                g.token_user = {'sub': 'admin_bypass', 'role': 'admin', 'insecure': True,
+                                 'note': f'Hardcoded bypass token accepted: {token}'}
+                add_log(f'[INSECURE] Hardcoded bypass token used: {token}', 'DANGER', 'API')
+            else:
+                # Try JWT but don't fail — just decode without verification
+                try:
+                    payload = jwt.decode(token, options={"verify_signature": False}, algorithms=['HS256', 'none'])
+                    g.token_user = {**payload, 'insecure': True, 'note': 'Signature NOT verified (insecure mode)'}
+                    add_log(f'[INSECURE] JWT accepted without signature check', 'DANGER', 'API')
+                except Exception:
+                    g.token_user = {'sub': 'unknown', 'role': 'user', 'insecure': True,
+                                     'note': f'Any token accepted in insecure mode: {token[:20]}'}
+                    add_log(f'[INSECURE] Arbitrary token accepted: {token[:20]}', 'WARNING', 'API')
+            return f(*args, **kwargs)
+
         try:
             payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
             g.token_user = payload
         except jwt.ExpiredSignatureError:
-            return jsonify({'error': 'Token expired'}), 401
-        except jwt.InvalidTokenError:
-            return jsonify({'error': 'Invalid token'}), 401
+            return jsonify({'error': 'Token expired', 'hint': 'Request a new token'}), 401
+        except jwt.InvalidTokenError as e:
+            return jsonify({'error': 'Invalid token', 'detail': str(e)}), 401
         return f(*args, **kwargs)
     return decorated
 
@@ -218,18 +267,25 @@ def record_failed_login(user_id, username):
         locked_until = datetime.utcnow() + timedelta(minutes=LOCKOUT_MINUTES)
         db.execute("UPDATE users SET failed_attempts=?, locked_until=? WHERE id=?",
                    (attempts, locked_until.isoformat(), user_id))
-        add_log(f'Account LOCKED: {username} after {attempts} failed attempts',
+        add_log(f'Account LOCKED: {username} after {attempts} failed attempts — brute force protection triggered',
                 'DANGER', 'AUTH', username=username)
     else:
         db.execute("UPDATE users SET failed_attempts=? WHERE id=?", (attempts, user_id))
-        add_log(f'Failed login attempt {attempts}/{MAX_FAILED_ATTEMPTS}: {username}',
+        remaining = MAX_FAILED_ATTEMPTS - attempts
+        add_log(f'Failed login attempt {attempts}/{MAX_FAILED_ATTEMPTS}: {username} — {remaining} attempt(s) remaining',
                 'WARNING', 'AUTH', username=username)
     db.commit()
+    return attempts
 
 def reset_failed_login(user_id):
     db = get_db()
     db.execute("UPDATE users SET failed_attempts=0, locked_until=NULL WHERE id=?", (user_id,))
     db.commit()
+
+def get_failed_attempts(user_id):
+    db = get_db()
+    row = db.execute("SELECT failed_attempts FROM users WHERE id=?", (user_id,)).fetchone()
+    return row['failed_attempts'] if row else 0
 
 # ─────────────────────────── CSRF helpers ──────────────────────────────────
 
@@ -244,6 +300,7 @@ def validate_csrf(form_token):
 app.jinja_env.globals['csrf_token'] = generate_csrf_token
 app.jinja_env.globals['now'] = datetime.utcnow
 app.jinja_env.globals['role_permissions'] = ROLE_PERMISSIONS
+app.jinja_env.globals['MAX_FAILED_ATTEMPTS'] = MAX_FAILED_ATTEMPTS
 
 # ─────────────────────────── Input sanitization ────────────────────────────
 
@@ -253,24 +310,68 @@ def sanitize_input(value):
 def check_password_strength(password):
     score = 0
     feedback = []
-    if len(password) >= 8:
-        score += 1
-    else:
-        feedback.append('At least 8 characters')
-    if re.search(r'[A-Z]', password):
-        score += 1
-    else:
-        feedback.append('At least one uppercase letter')
-    if re.search(r'[0-9]', password):
-        score += 1
-    else:
-        feedback.append('At least one number')
-    if re.search(r'[^a-zA-Z0-9]', password):
-        score += 1
-    else:
-        feedback.append('At least one special character')
+    checks = [
+        (len(password) >= 8,              'At least 8 characters'),
+        (bool(re.search(r'[A-Z]', password)), 'At least one uppercase letter'),
+        (bool(re.search(r'[0-9]', password)), 'At least one number'),
+        (bool(re.search(r'[^a-zA-Z0-9]', password)), 'At least one special character'),
+    ]
+    for passed, hint in checks:
+        if passed:
+            score += 1
+        else:
+            feedback.append(hint)
     labels = {0: 'VERY WEAK', 1: 'WEAK', 2: 'MODERATE', 3: 'STRONG', 4: 'VERY STRONG'}
-    return score, labels.get(score, 'WEAK'), feedback
+    entropy = len(set(password)) * len(password) * 0.5
+    return score, labels.get(score, 'WEAK'), feedback, round(entropy, 1)
+
+# ─────────────────────────── Security Score ────────────────────────────────
+
+def compute_security_score():
+    score = 100
+    deductions = []
+    db = get_db()
+    secure = get_secure_mode()
+
+    if not secure:
+        score -= 30
+        deductions.append({'item': 'Insecure mode active', 'points': -30, 'color': 'danger'})
+
+    cutoff = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+    danger_count = db.execute(
+        "SELECT COUNT(*) as c FROM logs WHERE level='DANGER' AND timestamp > ?", (cutoff,)
+    ).fetchone()['c']
+    if danger_count > 0:
+        pts = min(danger_count * 3, 25)
+        score -= pts
+        deductions.append({'item': f'{danger_count} danger events (last hour)', 'points': -pts, 'color': 'danger'})
+
+    locked = db.execute(
+        "SELECT COUNT(*) as c FROM users WHERE locked_until > ?", (datetime.utcnow().isoformat(),)
+    ).fetchone()['c']
+    if locked > 0:
+        score -= 5
+        deductions.append({'item': f'{locked} account(s) currently locked', 'points': -5, 'color': 'warning'})
+
+    csrf_blocks = db.execute(
+        "SELECT COUNT(*) as c FROM logs WHERE category='CSRF' AND level='DANGER' AND timestamp > ?", (cutoff,)
+    ).fetchone()['c']
+    if csrf_blocks > 0:
+        score -= min(csrf_blocks * 2, 10)
+        deductions.append({'item': f'{csrf_blocks} CSRF attacks (last hour)', 'points': -min(csrf_blocks*2,10), 'color': 'warning'})
+
+    score = max(score, 0)
+    if score >= 80:
+        risk = 'LOW'
+        risk_color = 'green'
+    elif score >= 50:
+        risk = 'MEDIUM'
+        risk_color = 'yellow'
+    else:
+        risk = 'HIGH'
+        risk_color = 'red'
+
+    return {'score': score, 'risk': risk, 'risk_color': risk_color, 'deductions': deductions}
 
 # ─────────────────────────── Anomaly detection ─────────────────────────────
 
@@ -301,6 +402,25 @@ def get_anomalies():
         'locked_accounts': [dict(r) for r in locked_accounts]
     }
 
+# ─────────────────────────── Caesar cipher ─────────────────────────────────
+
+def caesar_cipher(text, shift, decrypt=False):
+    if decrypt:
+        shift = -shift
+    result = []
+    steps = []
+    for ch in text:
+        if ch.isalpha():
+            base = ord('A') if ch.isupper() else ord('a')
+            orig_pos = ord(ch) - base
+            new_pos = (orig_pos + shift) % 26
+            new_ch = chr(new_pos + base)
+            steps.append({'char': ch, 'pos': orig_pos, 'shift': shift % 26, 'new_pos': new_pos, 'result': new_ch})
+            result.append(new_ch)
+        else:
+            result.append(ch)
+    return ''.join(result), steps
+
 # ─────────────────────────── Routes ────────────────────────────────────────
 
 @app.route('/')
@@ -314,6 +434,10 @@ def index():
 def login():
     error = None
     lockout_remaining = None
+    lockout_until_ts = None
+    failed_attempts = 0
+    remaining_attempts = MAX_FAILED_ATTEMPTS
+
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
@@ -325,12 +449,12 @@ def login():
         user = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
 
         if secure:
-            # CSRF check
             if not validate_csrf(csrf_form):
                 add_log(f'[SECURE] CSRF token mismatch from {ip}', 'DANGER', 'CSRF')
                 error = 'Invalid request (CSRF token mismatch)'
                 return render_template('login.html', error=error, secure=secure,
-                                       lockout_remaining=None)
+                                       lockout_remaining=None, remaining_attempts=MAX_FAILED_ATTEMPTS,
+                                       failed_attempts=0)
 
             if not user:
                 add_log(f'[SECURE] Unknown user login attempt: {username}', 'WARNING', 'AUTH', username=username)
@@ -338,10 +462,12 @@ def login():
             else:
                 locked, locked_until = is_account_locked(user)
                 if locked:
-                    remaining = int((locked_until - datetime.utcnow()).total_seconds() / 60) + 1
-                    lockout_remaining = remaining
+                    remaining_secs = int((locked_until - datetime.utcnow()).total_seconds())
+                    remaining_mins = remaining_secs // 60 + 1
+                    lockout_remaining = remaining_mins
+                    lockout_until_ts = int(locked_until.timestamp() * 1000)
                     add_log(f'[SECURE] Login attempted on locked account: {username}', 'DANGER', 'AUTH', username=username)
-                    error = f'Account locked. Try again in {remaining} minute(s).'
+                    error = f'Account locked. Try again in {remaining_mins} minute(s).'
                 else:
                     try:
                         pw_ok = bcrypt.checkpw(password.encode(), user['password'].encode())
@@ -355,16 +481,20 @@ def login():
                         session['username'] = user['username']
                         session['role'] = user['role']
                         session['bound_ip'] = ip
+                        session['login_time'] = datetime.utcnow().isoformat()
                         db.execute("UPDATE users SET last_login=?, last_ip=? WHERE id=?",
                                    (datetime.utcnow().isoformat(), ip, user['id']))
                         db.commit()
+                        add_session_event(username, 'LOGIN', f'Secure login from {ip}', ip)
                         add_log(f'[SECURE] Successful login: {username}', 'SUCCESS', 'AUTH', username=username)
                         return redirect(url_for('dashboard'))
                     else:
-                        record_failed_login(user['id'], username)
-                        error = 'Invalid credentials'
+                        attempts = record_failed_login(user['id'], username)
+                        failed_attempts = attempts
+                        remaining_attempts = max(MAX_FAILED_ATTEMPTS - attempts, 0)
+                        error = f'Invalid credentials — {remaining_attempts} attempt(s) remaining before lockout'
         else:
-            # INSECURE MODE — no CSRF, no lockout, role from form
+            # INSECURE MODE
             if not user:
                 error = 'Invalid credentials'
             else:
@@ -376,15 +506,21 @@ def login():
                     session['user_id'] = user['id']
                     session['username'] = user['username']
                     session['role'] = request.form.get('role', user['role'])
-                    add_log(f'[INSECURE] Login: {username} role={session["role"]} (no lockout, no CSRF)',
+                    session['db_role'] = user['role']
+                    session['login_time'] = datetime.utcnow().isoformat()
+                    add_log(f'[INSECURE] Login: {username} role={session["role"]} db_role={user["role"]} (no lockout, no CSRF)',
                             'WARNING', 'AUTH', username=username)
                     return redirect(url_for('dashboard'))
                 else:
-                    add_log(f'[INSECURE] Failed login: {username}', 'WARNING', 'AUTH', username=username)
-                    error = 'Invalid credentials'
+                    add_log(f'[INSECURE] Failed login: {username} (no lockout applied)', 'WARNING', 'AUTH', username=username)
+                    error = 'Invalid credentials (no lockout in attack mode)'
 
     return render_template('login.html', error=error, secure=get_secure_mode(),
-                           lockout_remaining=lockout_remaining)
+                           lockout_remaining=lockout_remaining,
+                           lockout_until_ts=lockout_until_ts,
+                           failed_attempts=failed_attempts,
+                           remaining_attempts=remaining_attempts,
+                           max_attempts=MAX_FAILED_ATTEMPTS)
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -407,7 +543,7 @@ def register():
             elif not re.match(r'^[a-zA-Z0-9_]+$', username):
                 error = 'Username: letters, numbers, underscores only'
             else:
-                score, label, feedback = check_password_strength(password)
+                score, label, feedback, entropy = check_password_strength(password)
                 if score < 3:
                     error = f'Password too weak ({label}): {", ".join(feedback)}'
                 else:
@@ -431,7 +567,7 @@ def register():
                 db.commit()
                 add_log(f'[INSECURE] Registered: {username} (no validation, no strength check)',
                         'WARNING', 'AUTH', username=username)
-                success = f'Account created! (No validation — username: {username}, pw stored: *** [bcrypt])'
+                success = f'Account created! (No validation — username: {username})'
             except sqlite3.IntegrityError:
                 error = 'Username already taken'
 
@@ -458,6 +594,7 @@ def dashboard():
     perms = ROLE_PERMISSIONS.get(role, [])
     anomalies = get_anomalies()
     threat_count = len(anomalies['suspicious_ips']) + len(anomalies['locked_accounts'])
+    sec_score = compute_security_score()
 
     return render_template('dashboard.html',
                            username=session.get('username'),
@@ -468,7 +605,8 @@ def dashboard():
                            users_count=users_count,
                            threat_count=threat_count,
                            anomalies=anomalies,
-                           role_hierarchy=ROLE_HIERARCHY)
+                           role_hierarchy=ROLE_HIERARCHY,
+                           sec_score=sec_score)
 
 
 @app.route('/admin')
@@ -545,8 +683,6 @@ def security_dashboard():
     stats = {
         'total_logins': db.execute("SELECT COUNT(*) as c FROM logs WHERE category='AUTH' AND level='SUCCESS'").fetchone()['c'],
         'failed_logins': db.execute("SELECT COUNT(*) as c FROM logs WHERE category='AUTH' AND level='WARNING'").fetchone()['c'],
-        'locked_accounts': db.execute("SELECT COUNT(*) as c FROM users WHERE locked_until > ?",
-                                      (datetime.utcnow().isoformat(),)).fetchone()['c'],
         'csrf_blocks': db.execute("SELECT COUNT(*) as c FROM logs WHERE category='CSRF'").fetchone()['c'],
         'access_denied': db.execute("SELECT COUNT(*) as c FROM logs WHERE category='ACCESS_CONTROL' AND level='DANGER'").fetchone()['c'],
     }
@@ -560,27 +696,72 @@ def security_dashboard():
                            category_counts=category_counts)
 
 
-@app.route('/crypto-lab')
+@app.route('/crypto-lab', methods=['GET', 'POST'])
 @login_required
 def crypto_lab():
     secure = get_secure_mode()
     sample = request.args.get('sample', 'admin123')
     sample_clean = sample[:64]
+
     sha256_hash = hashlib.sha256(sample_clean.encode()).hexdigest()
     sha512_hash = hashlib.sha512(sample_clean.encode()).hexdigest()
     md5_hash = hashlib.md5(sample_clean.encode()).hexdigest()
+    sha1_hash = hashlib.sha1(sample_clean.encode()).hexdigest()
     bcrypt_hash = bcrypt.hashpw(sample_clean.encode(), bcrypt.gensalt(rounds=10)).decode()
-    payload = {'sub': session.get('username'), 'role': session.get('role'), 'exp': datetime.utcnow() + timedelta(hours=1)}
+
+    payload = {'sub': session.get('username'), 'role': session.get('role'),
+               'exp': datetime.utcnow() + timedelta(hours=1)}
     jwt_token = jwt.encode(payload, JWT_SECRET, algorithm='HS256')
+
+    b64_encoded = base64.b64encode(sample_clean.encode()).decode()
+    b64_decoded_try = ''
+    try:
+        b64_decoded_try = base64.b64decode(sample_clean + '==').decode('utf-8', errors='replace')
+    except Exception:
+        b64_decoded_try = '(not valid base64)'
+
+    caesar_shift = int(request.args.get('shift', 3))
+    caesar_encrypted, caesar_steps = caesar_cipher(sample_clean, caesar_shift)
+    caesar_decrypted, _ = caesar_cipher(caesar_encrypted, caesar_shift, decrypt=True)
+
+    # Rainbow table demo (pre-computed hashes for common passwords)
+    rainbow_table = [
+        {'password': 'password', 'md5': hashlib.md5(b'password').hexdigest(), 'sha256': hashlib.sha256(b'password').hexdigest()},
+        {'password': '123456',   'md5': hashlib.md5(b'123456').hexdigest(),   'sha256': hashlib.sha256(b'123456').hexdigest()},
+        {'password': 'admin',    'md5': hashlib.md5(b'admin').hexdigest(),    'sha256': hashlib.sha256(b'admin').hexdigest()},
+        {'password': 'letmein',  'md5': hashlib.md5(b'letmein').hexdigest(),  'sha256': hashlib.sha256(b'letmein').hexdigest()},
+        {'password': 'qwerty',   'md5': hashlib.md5(b'qwerty').hexdigest(),   'sha256': hashlib.sha256(b'qwerty').hexdigest()},
+    ]
+    rainbow_match = None
+    for entry in rainbow_table:
+        if entry['md5'] == md5_hash or entry['sha256'] == sha256_hash:
+            rainbow_match = entry['password']
+            break
+
+    pw_score, pw_label, pw_feedback, pw_entropy = check_password_strength(sample_clean)
+
     return render_template('crypto_lab.html',
                            secure=secure,
                            sample=sample_clean,
                            sha256=sha256_hash,
                            sha512=sha512_hash,
+                           sha1=sha1_hash,
                            md5=md5_hash,
                            bcrypt_hash=bcrypt_hash,
                            jwt_token=jwt_token,
-                           jwt_payload=json.dumps(payload, indent=2, default=str))
+                           jwt_payload=json.dumps(payload, indent=2, default=str),
+                           b64_encoded=b64_encoded,
+                           b64_decoded=b64_decoded_try,
+                           caesar_shift=caesar_shift,
+                           caesar_encrypted=caesar_encrypted,
+                           caesar_decrypted=caesar_decrypted,
+                           caesar_steps=caesar_steps[:8],
+                           rainbow_table=rainbow_table,
+                           rainbow_match=rainbow_match,
+                           pw_score=pw_score,
+                           pw_label=pw_label,
+                           pw_feedback=pw_feedback,
+                           pw_entropy=pw_entropy)
 
 
 @app.route('/exploit/parameter-tamper', methods=['GET', 'POST'])
@@ -594,16 +775,20 @@ def parameter_tamper():
             try:
                 amount_val = float(amount)
                 if amount_val < 0 or amount_val > 10000:
-                    result = {'status': 'BLOCKED', 'msg': f'Amount {amount_val} out of range (0–10000)', 'color': 'danger'}
+                    result = {'status': 'BLOCKED', 'msg': f'Amount {amount_val} out of range (0–10000)', 'color': 'danger',
+                              'steps': ['Input received', 'Type check: PASS (numeric)', f'Range check: FAIL ({amount_val} not in 0–10000)', 'Request REJECTED']}
                     add_log(f'[SECURE] Parameter tamper blocked: amount={amount}', 'SUCCESS', 'ATTACK')
                 else:
-                    result = {'status': 'ACCEPTED', 'msg': f'Transaction: ${amount_val:.2f}', 'color': 'success'}
+                    result = {'status': 'ACCEPTED', 'msg': f'Transaction: ${amount_val:.2f}', 'color': 'success',
+                              'steps': ['Input received', 'Type check: PASS', 'Range check: PASS (0–10000)', 'Transaction processed']}
             except ValueError:
-                result = {'status': 'BLOCKED', 'msg': f'Non-numeric input rejected: {sanitize_input(amount)}', 'color': 'danger'}
+                result = {'status': 'BLOCKED', 'msg': f'Non-numeric input rejected: {sanitize_input(amount)}', 'color': 'danger',
+                          'steps': ['Input received', f'Type check: FAIL (not numeric: {sanitize_input(amount)})', 'Request REJECTED']}
                 add_log(f'[SECURE] Injection blocked: amount={amount}', 'SUCCESS', 'ATTACK')
         else:
             add_log(f'[INSECURE] Unvalidated transaction: amount={amount}', 'WARNING', 'ATTACK')
-            result = {'status': 'EXPLOITED', 'msg': f'Accepted: ${amount} (no validation!)', 'color': 'warning'}
+            result = {'status': 'EXPLOITED', 'msg': f'Accepted without validation: ${amount}', 'color': 'warning',
+                      'steps': ['Input received', 'No type check', 'No range check', f'Value accepted as-is: {amount}', 'Transaction processed (EXPLOITED!)']}
     return render_template('parameter_tamper.html', result=result, secure=secure)
 
 
@@ -615,12 +800,29 @@ def xss_demo():
     user_input = ''
     if request.method == 'POST':
         user_input = request.form.get('comment', '')
+        has_script = bool(re.search(r'<script|<img|<svg|javascript:|onerror|onload', user_input, re.I))
         if secure:
             safe = sanitize_input(user_input)
-            result = {'raw': user_input, 'rendered': safe, 'status': 'SANITIZED', 'color': 'success'}
+            result = {'raw': user_input, 'rendered': safe, 'status': 'SANITIZED', 'color': 'success',
+                      'has_payload': has_script,
+                      'steps': [
+                          f'Input received: {user_input[:40]}',
+                          'html.escape() applied',
+                          f'< → &lt;, > → &gt;, " → &quot;',
+                          f'Output: {safe[:40]}',
+                          'Safe to render — script neutralized'
+                      ]}
             add_log(f'[SECURE] XSS payload sanitized: {user_input[:60]}', 'SUCCESS', 'ATTACK')
         else:
-            result = {'raw': user_input, 'rendered': user_input, 'status': 'VULNERABLE', 'color': 'danger'}
+            result = {'raw': user_input, 'rendered': user_input, 'status': 'VULNERABLE', 'color': 'danger',
+                      'has_payload': has_script,
+                      'steps': [
+                          f'Input received: {user_input[:40]}',
+                          'No sanitization applied',
+                          'Raw HTML passed to template',
+                          '{{ result.rendered | safe }} used in Jinja',
+                          'Script executes in victim browser!' if has_script else 'Input rendered as-is'
+                      ]}
             add_log(f'[INSECURE] XSS payload rendered raw: {user_input[:60]}', 'WARNING', 'ATTACK')
     return render_template('xss_demo.html', secure=secure, result=result, user_input=user_input)
 
@@ -635,40 +837,54 @@ def sqli_demo():
         user_input = request.form.get('username', '')
         db = get_db()
         if secure:
-            # Parameterized query
             try:
                 rows = db.execute("SELECT id, username, role FROM users WHERE username=?",
                                   (user_input,)).fetchall()
                 result = {
                     'status': 'SECURE',
-                    'query': f"SELECT id, username, role FROM users WHERE username=? -- param: {user_input}",
+                    'query': f"SELECT id, username, role FROM users WHERE username=?",
+                    'param': user_input,
                     'rows': [dict(r) for r in rows],
                     'color': 'success',
-                    'note': 'Parameterized query — input treated as data, not SQL'
+                    'note': 'Parameterized query — input treated as data, not SQL',
+                    'steps': [
+                        f'Input received: {user_input}',
+                        'Prepared statement created with ? placeholder',
+                        'Input bound as parameter (literal string)',
+                        'No SQL interpretation of input',
+                        f'Query executed safely — {len(rows)} row(s) returned'
+                    ]
                 }
                 add_log(f'[SECURE] SQL query parameterized for input: {user_input[:40]}', 'SUCCESS', 'ATTACK')
             except Exception as e:
-                result = {'status': 'ERROR', 'query': str(e), 'rows': [], 'color': 'danger', 'note': str(e)}
+                result = {'status': 'ERROR', 'query': str(e), 'rows': [], 'color': 'danger', 'note': str(e), 'steps': []}
         else:
-            # Vulnerable string concatenation
             raw_query = f"SELECT id, username, role FROM users WHERE username='{user_input}'"
             try:
                 rows = db.execute(raw_query).fetchall()
+                is_injection = len(rows) > 1 or "'" in user_input or '--' in user_input or 'UNION' in user_input.upper()
                 result = {
-                    'status': 'EXPLOITED',
+                    'status': 'EXPLOITED' if is_injection else 'EXECUTED',
                     'query': raw_query,
+                    'param': None,
                     'rows': [dict(r) for r in rows],
-                    'color': 'warning',
-                    'note': 'String concatenation — SQL injection possible!'
+                    'color': 'warning' if is_injection else 'danger',
+                    'note': 'String concatenation — SQL injection successful!' if is_injection else 'String concatenation — vulnerable to injection',
+                    'steps': [
+                        f'Input received: {user_input}',
+                        'Input concatenated directly into SQL string',
+                        f'Final query: {raw_query[:80]}',
+                        'Database executes modified query',
+                        f'{"INJECTION SUCCESSFUL — " + str(len(rows)) + " row(s) leaked!" if is_injection else "Query executed without validation"}'
+                    ]
                 }
                 add_log(f'[INSECURE] Raw SQL executed: {raw_query[:80]}', 'WARNING', 'ATTACK')
             except Exception as e:
                 result = {
-                    'status': 'ERROR',
-                    'query': raw_query,
-                    'rows': [],
-                    'color': 'danger',
-                    'note': f'SQL Error: {str(e)}'
+                    'status': 'ERROR', 'query': raw_query, 'param': None,
+                    'rows': [], 'color': 'danger',
+                    'note': f'SQL Error: {str(e)}',
+                    'steps': [f'SQL Error: {str(e)}']
                 }
     return render_template('sqli_demo.html', secure=secure, result=result, user_input=user_input)
 
@@ -678,26 +894,49 @@ def sqli_demo():
 def csrf_demo():
     secure = get_secure_mode()
     result = None
+    flow_steps = []
+
     if request.method == 'POST':
         csrf_form = request.form.get('csrf_token', '')
         action = request.form.get('action', 'transfer')
         amount = request.form.get('amount', '500')
+        is_forged = request.form.get('forged', '0') == '1'
+
+        flow_steps = [
+            {'step': 'Incoming Request', 'detail': f'POST /exploit/csrf-demo — action={action}, amount=${amount}',
+             'status': 'info'},
+            {'step': 'Request Origin', 'detail': 'Same-origin (legit page)' if not is_forged else 'Cross-origin (forged/attacker page)',
+             'status': 'success' if not is_forged else 'danger'},
+            {'step': 'CSRF Token Present', 'detail': f'Token: {csrf_form[:20]}...' if csrf_form and csrf_form != 'FORGED_INVALID_TOKEN_12345' else 'FORGED or MISSING token',
+             'status': 'success' if (csrf_form and csrf_form != 'FORGED_INVALID_TOKEN_12345') else 'danger'},
+        ]
+
         if secure:
-            if validate_csrf(csrf_form):
+            token_valid = validate_csrf(csrf_form)
+            flow_steps.append({
+                'step': 'Session Token Comparison',
+                'detail': 'Token matches session: YES' if token_valid else 'Token matches session: NO — MISMATCH!',
+                'status': 'success' if token_valid else 'danger'
+            })
+            if token_valid:
+                flow_steps.append({'step': 'Server Decision', 'detail': 'ALLOW — valid CSRF token', 'status': 'success'})
                 result = {'status': 'ALLOWED', 'msg': f'CSRF token valid — {action} of ${amount} processed.',
                           'color': 'success', 'attack': False}
                 add_log(f'[SECURE] CSRF validated — action={action}, amount={amount}', 'SUCCESS', 'CSRF')
             else:
+                flow_steps.append({'step': 'Server Decision', 'detail': 'BLOCK — CSRF token invalid. Request rejected!', 'status': 'danger'})
                 result = {'status': 'BLOCKED', 'msg': 'CSRF token missing or invalid — request rejected!',
                           'color': 'danger', 'attack': True}
-                add_log(f'[SECURE] CSRF attack blocked — forged token from {get_client_ip()}',
-                        'DANGER', 'CSRF')
+                add_log(f'[SECURE] CSRF attack blocked — forged token from {get_client_ip()}', 'DANGER', 'CSRF')
         else:
+            flow_steps.append({'step': 'Session Token Comparison', 'detail': 'No comparison performed — CSRF not checked!', 'status': 'warning'})
+            flow_steps.append({'step': 'Server Decision', 'detail': 'ALLOW — no CSRF protection in insecure mode', 'status': 'warning'})
             result = {'status': 'EXPLOITED',
                       'msg': f'No CSRF check — {action} of ${amount} executed from forged request!',
                       'color': 'warning', 'attack': True}
             add_log(f'[INSECURE] CSRF not checked — {action}=${amount}', 'WARNING', 'CSRF')
-    return render_template('csrf_demo.html', secure=secure, result=result)
+
+    return render_template('csrf_demo.html', secure=secure, result=result, flow_steps=flow_steps)
 
 
 @app.route('/exploit/rbac-demo', methods=['GET', 'POST'])
@@ -705,36 +944,46 @@ def csrf_demo():
 def rbac_demo():
     secure = get_secure_mode()
     role = session.get('role', 'user')
+    db_role = session.get('db_role', role)
+    cookie_role = request.cookies.get('role', role)
     result = None
+
     if request.method == 'POST':
         requested_perm = request.form.get('permission', 'access_admin')
         if secure:
             server_role = session.get('role', 'user')
             granted = requested_perm in ROLE_PERMISSIONS.get(server_role, [])
             result = {
-                'role': server_role,
-                'permission': requested_perm,
-                'granted': granted,
-                'source': 'server-side session',
+                'role': server_role, 'permission': requested_perm,
+                'granted': granted, 'source': 'server-side session (tamper-proof)',
                 'color': 'success' if granted else 'danger',
-                'status': 'GRANTED' if granted else 'DENIED'
+                'status': 'GRANTED' if granted else 'DENIED',
+                'cookie_role': cookie_role,
+                'session_role': server_role,
+                'db_role': db_role,
+                'effective_role': server_role,
+                'tampered': cookie_role != server_role
             }
             add_log(f'[SECURE] RBAC check: {server_role} → {requested_perm} = {"GRANT" if granted else "DENY"}',
                     'INFO' if granted else 'DANGER', 'ACCESS_CONTROL')
         else:
-            cookie_role = request.cookies.get('role', role)
             granted = requested_perm in ROLE_PERMISSIONS.get(cookie_role, [])
             result = {
-                'role': cookie_role,
-                'permission': requested_perm,
-                'granted': granted,
-                'source': 'client cookie (tamperable!)',
+                'role': cookie_role, 'permission': requested_perm,
+                'granted': granted, 'source': 'client cookie (tamperable!)',
                 'color': 'warning' if granted else 'danger',
-                'status': 'GRANTED (via cookie)' if granted else 'DENIED'
+                'status': 'GRANTED (via cookie)' if granted else 'DENIED',
+                'cookie_role': cookie_role,
+                'session_role': role,
+                'db_role': db_role,
+                'effective_role': cookie_role,
+                'tampered': cookie_role != role
             }
             add_log(f'[INSECURE] Cookie RBAC: role={cookie_role} → {requested_perm} = {"GRANT" if granted else "DENY"}',
                     'WARNING', 'ACCESS_CONTROL')
+
     return render_template('rbac_demo.html', secure=secure, role=role,
+                           cookie_role=cookie_role, db_role=db_role,
                            result=result, role_permissions=ROLE_PERMISSIONS,
                            role_hierarchy=ROLE_HIERARCHY)
 
@@ -743,22 +992,46 @@ def rbac_demo():
 @login_required
 def session_demo():
     secure = get_secure_mode()
+    db = get_db()
+    username = session.get('username')
+
+    session_events = db.execute(
+        "SELECT * FROM session_events WHERE username=? ORDER BY timestamp DESC LIMIT 10",
+        (username,)
+    ).fetchall()
+
+    login_time = session.get('login_time')
+    session_age_secs = None
+    if login_time:
+        try:
+            lt = datetime.fromisoformat(login_time)
+            session_age_secs = int((datetime.utcnow() - lt).total_seconds())
+        except Exception:
+            pass
+
     session_info = {
         'session_id': request.cookies.get('session', 'N/A'),
-        'user': session.get('username'),
+        'user': username,
         'role': session.get('role'),
+        'db_role': session.get('db_role', session.get('role')),
         'bound_ip': session.get('bound_ip', 'N/A'),
         'current_ip': get_client_ip(),
-        'secure': secure
+        'secure': secure,
+        'login_time': login_time,
+        'session_age_secs': session_age_secs,
     }
     if secure:
-        resp = make_response(render_template('session_demo.html', info=session_info, secure=secure))
+        add_session_event(username, 'SESSION_VIEW', 'Secure session inspected', get_client_ip())
+        resp = make_response(render_template('session_demo.html', info=session_info, secure=secure,
+                                             session_events=session_events))
         resp.set_cookie('demo_secure', 'true', httponly=True, samesite='Strict', max_age=300)
-        add_log('[SECURE] Session demo — secure cookies applied', 'SUCCESS', 'SESSION')
+        add_log('[SECURE] Session demo — secure cookies applied, IP-bound session', 'SUCCESS', 'SESSION')
         return resp
     else:
-        add_log('[INSECURE] Session demo — weak session handling exposed', 'WARNING', 'SESSION')
-        return render_template('session_demo.html', info=session_info, secure=secure)
+        add_session_event(username, 'SESSION_VIEW_INSECURE', 'Insecure session exposed', get_client_ip())
+        add_log('[INSECURE] Session demo — weak session handling exposed to inspection', 'WARNING', 'SESSION')
+        return render_template('session_demo.html', info=session_info, secure=secure,
+                               session_events=session_events)
 
 
 @app.route('/api-lab')
@@ -772,9 +1045,32 @@ def api_lab():
 
 @app.route('/toggle-mode', methods=['POST'])
 def toggle_mode():
-    current = session.get('secure_mode', False)
-    session['secure_mode'] = not current
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    was_insecure = not session.get('secure_mode', False)
+    session['secure_mode'] = not session.get('secure_mode', False)
     mode = 'SECURE' if session['secure_mode'] else 'INSECURE'
+
+    # FIX: When switching insecure → secure, revalidate role from database
+    escalation_detected = False
+    if session['secure_mode'] and was_insecure:
+        db = get_db()
+        user = db.execute("SELECT role FROM users WHERE id=?", (session.get('user_id'),)).fetchone()
+        if user:
+            db_role = user['role']
+            session_role = session.get('role')
+            if session_role != db_role:
+                escalation_detected = True
+                add_log(
+                    f'[SECURE] Privilege escalation detected on mode switch: '
+                    f'session_role={session_role} → restored db_role={db_role} for {session.get("username")}',
+                    'DANGER', 'ACCESS_CONTROL'
+                )
+            session['role'] = db_role
+            session['db_role'] = db_role
+
+    session['escalation_detected'] = escalation_detected
     add_log(f'System mode → {mode} by {session.get("username", "guest")}', 'INFO', 'GENERAL')
     return redirect(request.referrer or url_for('dashboard'))
 
@@ -785,9 +1081,18 @@ def toggle_mode():
 @login_required
 def api_logs():
     db = get_db()
-    logs = db.execute(
-        "SELECT message, level, category, ip_address, username, timestamp FROM logs ORDER BY timestamp DESC LIMIT 50"
-    ).fetchall()
+    limit = int(request.args.get('limit', 50))
+    category = request.args.get('category', None)
+    if category:
+        logs = db.execute(
+            "SELECT message, level, category, ip_address, username, timestamp FROM logs WHERE category=? ORDER BY timestamp DESC LIMIT ?",
+            (category, limit)
+        ).fetchall()
+    else:
+        logs = db.execute(
+            "SELECT message, level, category, ip_address, username, timestamp FROM logs ORDER BY timestamp DESC LIMIT ?",
+            (limit,)
+        ).fetchall()
     return jsonify([dict(r) for r in logs])
 
 
@@ -795,6 +1100,12 @@ def api_logs():
 @login_required
 def api_anomalies():
     return jsonify(get_anomalies())
+
+
+@app.route('/api/security-score')
+@login_required
+def api_security_score():
+    return jsonify(compute_security_score())
 
 
 @app.route('/api/token', methods=['POST'])
@@ -806,7 +1117,7 @@ def api_get_token():
     if secure:
         perms = ROLE_PERMISSIONS.get(role, [])
         if 'access_api' not in perms:
-            return jsonify({'error': 'Insufficient permissions'}), 403
+            return jsonify({'error': 'Insufficient permissions', 'hint': 'Only admin role can generate API tokens'}), 403
         payload = {
             'sub': username,
             'role': role,
@@ -815,24 +1126,70 @@ def api_get_token():
             'exp': datetime.utcnow() + timedelta(hours=1)
         }
         token = jwt.encode(payload, JWT_SECRET, algorithm='HS256')
-        add_log(f'[SECURE] JWT issued for {username}', 'SUCCESS', 'API')
-        return jsonify({'token': token, 'expires_in': 3600, 'type': 'Bearer'})
+        parts = token.split('.')
+        add_log(f'[SECURE] JWT issued for {username} with role={role}', 'SUCCESS', 'API')
+        return jsonify({
+            'token': token,
+            'expires_in': 3600,
+            'type': 'Bearer',
+            'structure': {
+                'header': parts[0] if len(parts) > 0 else '',
+                'payload': parts[1] if len(parts) > 1 else '',
+                'signature': parts[2] if len(parts) > 2 else ''
+            },
+            'decoded_header': {'alg': 'HS256', 'typ': 'JWT'},
+            'decoded_payload': payload,
+            'security_notes': [
+                'Signed with HMAC-SHA256',
+                'Contains role & permission claims',
+                'Expires in 1 hour',
+                'Signature verified on every request'
+            ]
+        })
     else:
         weak_token = secrets.token_hex(8)
-        add_log(f'[INSECURE] Weak token issued for {username}', 'WARNING', 'API')
-        return jsonify({'token': weak_token, 'note': 'Insecure — short, no expiry, no claims'})
+        bypass_tokens = ['admin', 'password', '00000000', 'bypass']
+        add_log(f'[INSECURE] Weak token issued for {username} — no signature, no expiry', 'WARNING', 'API')
+        return jsonify({
+            'token': weak_token,
+            'note': 'INSECURE — short random token, no signature, no expiry, no claims',
+            'bypass_tokens': bypass_tokens,
+            'vulnerabilities': [
+                'No cryptographic signature',
+                'No expiration time',
+                'No role/permission claims',
+                'Hardcoded bypass tokens work',
+                'Any token accepted in insecure mode'
+            ]
+        })
 
 
 @app.route('/api/protected')
 @token_required
 def api_protected():
     user = g.token_user
-    return jsonify({
-        'message': f'Hello {user["sub"]}! You have authenticated via JWT.',
+    secure = session.get('secure_mode', False)
+    insecure_flag = user.get('insecure', False)
+
+    response = {
+        'message': f'Hello {user.get("sub", "unknown")}! Protected endpoint accessed.',
         'role': user.get('role'),
         'permissions': user.get('permissions', []),
-        'server_time': datetime.utcnow().isoformat()
-    })
+        'server_time': datetime.utcnow().isoformat(),
+        'mode': 'SECURE' if secure else 'INSECURE',
+        'validation': {
+            'signature_verified': not insecure_flag,
+            'expiry_checked': not insecure_flag,
+            'note': user.get('note', 'Proper JWT validation applied')
+        }
+    }
+    if insecure_flag:
+        add_log(f'[INSECURE] /api/protected accessed without proper token verification', 'DANGER', 'API')
+        response['warning'] = 'This access was granted WITHOUT proper signature verification!'
+    else:
+        add_log(f'[SECURE] /api/protected accessed by {user.get("sub")} with valid JWT', 'SUCCESS', 'API')
+
+    return jsonify(response)
 
 
 @app.route('/api/stats')
@@ -843,15 +1200,107 @@ def api_stats():
         'users': db.execute("SELECT COUNT(*) as c FROM users").fetchone()['c'],
         'logs': db.execute("SELECT COUNT(*) as c FROM logs").fetchone()['c'],
         'danger_events': db.execute("SELECT COUNT(*) as c FROM logs WHERE level='DANGER'").fetchone()['c'],
-        'anomalies': get_anomalies()
+        'anomalies': get_anomalies(),
+        'security_score': compute_security_score()
     }
     return jsonify(data)
+
+
+@app.route('/api/brute-force', methods=['POST'])
+@login_required
+def api_brute_force():
+    """Simulated brute-force attack for educational demo"""
+    target = request.json.get('target', 'demo') if request.is_json else 'demo'
+    secure = get_secure_mode()
+    ip = get_client_ip()
+    results = []
+    passwords = ['123456', 'password', 'admin', 'letmein', 'qwerty', 'demo123']
+
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE username=?", (target,)).fetchone()
+
+    if not user:
+        return jsonify({'error': 'Target user not found', 'attempts': []})
+
+    for pw in passwords:
+        if secure:
+            locked, locked_until = is_account_locked(user)
+            if locked:
+                remaining = int((locked_until - datetime.utcnow()).total_seconds())
+                results.append({
+                    'password': pw, 'status': 'BLOCKED',
+                    'reason': f'Account locked — {remaining}s remaining',
+                    'color': 'danger'
+                })
+                add_log(f'[SECURE] Brute force attempt blocked on locked account: {target}', 'DANGER', 'BRUTE_FORCE', username=target, ip=ip)
+                break
+            try:
+                pw_ok = bcrypt.checkpw(pw.encode(), user['password'].encode())
+            except Exception:
+                pw_ok = False
+            if pw_ok:
+                results.append({'password': pw, 'status': 'SUCCESS — but lockout triggered after 3 fails', 'color': 'success'})
+                break
+            else:
+                attempts = record_failed_login(user['id'], target)
+                user = db.execute("SELECT * FROM users WHERE username=?", (target,)).fetchone()
+                results.append({
+                    'password': pw, 'status': 'FAILED',
+                    'reason': f'Wrong password — attempt {attempts}/{MAX_FAILED_ATTEMPTS}',
+                    'color': 'warning'
+                })
+                add_log(f'[SECURE] Brute force: attempt {attempts}/{MAX_FAILED_ATTEMPTS} on {target} with "{pw}"', 'WARNING', 'BRUTE_FORCE', username=target, ip=ip)
+        else:
+            try:
+                pw_ok = bcrypt.checkpw(pw.encode(), user['password'].encode())
+            except Exception:
+                pw_ok = False
+            if pw_ok:
+                results.append({'password': pw, 'status': 'CRACKED — no lockout protection!', 'color': 'danger'})
+                add_log(f'[INSECURE] Brute force SUCCESS: cracked {target} with "{pw}" — no lockout!', 'DANGER', 'BRUTE_FORCE', username=target, ip=ip)
+            else:
+                results.append({'password': pw, 'status': 'FAILED — trying next', 'color': 'warning'})
+                add_log(f'[INSECURE] Brute force attempt: {target} / {pw} — no lockout applied', 'WARNING', 'BRUTE_FORCE', username=target, ip=ip)
+
+    return jsonify({'target': target, 'mode': 'SECURE' if secure else 'INSECURE', 'attempts': results})
+
+
+@app.route('/api/crypto', methods=['POST'])
+@login_required
+def api_crypto():
+    """Interactive crypto operations"""
+    data = request.get_json(force=True)
+    op = data.get('op', 'hash')
+    text = str(data.get('text', ''))[:128]
+
+    if op == 'base64_encode':
+        return jsonify({'result': base64.b64encode(text.encode()).decode(), 'op': op})
+    elif op == 'base64_decode':
+        try:
+            decoded = base64.b64decode(text + '==').decode('utf-8', errors='replace')
+            return jsonify({'result': decoded, 'op': op})
+        except Exception as e:
+            return jsonify({'result': f'Error: {str(e)}', 'op': op})
+    elif op == 'caesar':
+        shift = int(data.get('shift', 3))
+        encrypted, steps = caesar_cipher(text, shift)
+        return jsonify({'result': encrypted, 'steps': steps[:5], 'op': op})
+    elif op == 'hash_md5':
+        return jsonify({'result': hashlib.md5(text.encode()).hexdigest(), 'op': op})
+    elif op == 'hash_sha256':
+        return jsonify({'result': hashlib.sha256(text.encode()).hexdigest(), 'op': op})
+    elif op == 'strength':
+        score, label, feedback, entropy = check_password_strength(text)
+        return jsonify({'score': score, 'label': label, 'feedback': feedback, 'entropy': entropy, 'op': op})
+    else:
+        return jsonify({'error': 'Unknown operation'}), 400
 
 
 @app.route('/logout')
 def logout():
     username = session.get('username', 'unknown')
     add_log(f'User logged out: {username}', 'INFO', 'AUTH', username=username)
+    add_session_event(username, 'LOGOUT', 'User logged out', get_client_ip())
     session.clear()
     return redirect(url_for('login'))
 
