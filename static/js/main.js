@@ -9,7 +9,7 @@ window.addEventListener('load', () => {
   }
 });
 
-/* ─── Typing animation for login terminal ───────────────────── */
+/* ─── Typing animation ──────────────────────────────────────── */
 function typeText(elementId, text, speed = 80) {
   const el = document.getElementById(elementId);
   if (!el) return;
@@ -21,30 +21,73 @@ function typeText(elementId, text, speed = 80) {
   }, speed);
 }
 
+/* ─── Universal toggle for learning panels ──────────────────── */
+function toggleLearn(header) {
+  const body = header.nextElementSibling;
+  if (!body) return;
+  const icon = header.querySelector('.fa-chevron-down, .fa-chevron-up');
+  const isHidden = !body.style.display || body.style.display === 'none';
+  body.style.display = isHidden ? '' : 'none';
+  if (icon) {
+    icon.classList.toggle('fa-chevron-down', !isHidden);
+    icon.classList.toggle('fa-chevron-up', isHidden);
+  }
+}
+
+/* ─── Debounce ──────────────────────────────────────────────── */
+function debounce(fn, wait) {
+  let timer;
+  return function(...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), wait);
+  };
+}
+
+/* ─── Score bar animation ───────────────────────────────────── */
+function animateScoreBars() {
+  document.querySelectorAll('.score-bar-fill, .strength-fill').forEach(bar => {
+    const target = bar.style.width;
+    bar.style.width = '0%';
+    requestAnimationFrame(() => {
+      setTimeout(() => { bar.style.width = target; }, 100);
+    });
+  });
+
+  document.querySelectorAll('circle[stroke-dasharray]').forEach(circle => {
+    const dashArray = circle.getAttribute('stroke-dasharray');
+    circle.setAttribute('stroke-dasharray', '0 263.9');
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        circle.style.transition = 'stroke-dasharray 0.8s ease';
+        circle.setAttribute('stroke-dasharray', dashArray);
+      }, 150);
+    });
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   typeText('typeTarget', ' authenticate --secure');
 
-  /* ─── Hover glow on buttons / cards ─────────────────────── */
-  document.querySelectorAll('.btn-hacker, .level-card, .action-card').forEach(el => {
-    el.addEventListener('mouseenter', () => el.style.transition = 'all 0.2s ease');
-  });
-
-  /* ─── Input focus highlight ─────────────────────────────── */
   document.querySelectorAll('.input-hacker').forEach(input => {
     input.addEventListener('focus',  () => input.parentElement.classList.add('focused'));
     input.addEventListener('blur',   () => input.parentElement.classList.remove('focused'));
   });
 
-  /* ─── Log filter tabs ───────────────────────────────────── */
   document.querySelectorAll('.log-tab').forEach(tab => {
     tab.addEventListener('click', function() {
       document.querySelectorAll('.log-tab').forEach(t => t.classList.remove('active'));
       this.classList.add('active');
     });
   });
+
+  document.querySelectorAll('.learn-body').forEach(el => {
+    if (!el.style.display) el.style.display = 'none';
+  });
+
+  animateScoreBars();
 });
 
-/* ─── Random matrix background (canvas) on auth pages ───────── */
+/* ─── Matrix rain (auth pages only) ────────────────────────── */
 (function() {
   const isAuth = document.querySelector('.auth-wrapper');
   if (!isAuth) return;
