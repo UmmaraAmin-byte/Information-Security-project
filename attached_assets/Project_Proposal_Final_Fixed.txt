@@ -1,0 +1,234 @@
+Project Proposal
+Title: Hacker vs System – A Gamified Web Security Learning Platform
+Submitted By:
+Ummara Amin
+
+1. Introduction
+With the increasing dependence on web applications, security vulnerabilities such as weak
+authentication, improper access control, insecure session handling, and poor password storage
+have become major concerns. Many systems fail because developers implement functionality
+without considering security practices.
+This project aims to develop a gamified web application that demonstrates common web security
+vulnerabilities and their secure implementations. The system will allow users to observe how
+attacks are performed on insecure systems and how proper security mechanisms can prevent them.
+
+2. Project Objectives
+The main objectives of this project are:
+1.  To develop a web application with:
+    • User authentication
+    • Role-based access control
+    • Restricted pages for admins and users
+2.  To demonstrate common web vulnerabilities including:
+    • Login bypass
+    • Broken Access Control
+    • Session hijacking
+    • Data tampering
+3.  To perform attack simulations within the platform (brute-force, parameter tampering,
+    cookie manipulation, XSS, SQL injection, CSRF, and JWT bypass)
+4.  To implement secure solutions using:
+    • Password hashing
+    • Secure session management
+    • Proper authorization checks
+5.  To demonstrate cryptographic concepts such as:
+    • SHA-256 and bcrypt hashing
+    • RSA encryption and decryption
+    • Digital signatures
+
+3. Proposed System
+The proposed system is a "Hacker vs System" platform where users can interact with different
+security levels. Each level demonstrates:
+1.  An insecure implementation
+2.  How the vulnerability is exploited
+3.  A secure implementation preventing the attack
+
+The project will include three user roles:
+• Admin
+• Moderator
+• User
+Access to pages and functionalities will depend on user roles.
+
+4. System Modules
+
+4.1 Authentication Module
+Features:
+• User registration
+• User login
+• Password validation
+• Session handling
+Security Features:
+• bcrypt password hashing
+• Account lockout after 3 failed attempts
+• CSRF token protection on all forms
+• Secure login verification with session IP binding
+
+4.2 Role-Based Access Control Module
+Features:
+• Admin dashboard
+• User dashboard
+• Restricted routes/pages
+Examples:
+• Only admins can access:
+  • User management
+  • Sensitive controls
+• Normal users cannot access admin functionalities
+
+4.3 Vulnerability Demonstration Levels
+Level 1: Login Bypass
+Demonstrates:
+• Weak authentication mechanisms
+• Improper validation
+Fix:
+• bcrypt password verification
+• Attempt lockout and CSRF protection
+
+Level 2: Role Escalation
+Demonstrates:
+• Improper role handling
+Attack:
+• Modify role values in requests/cookies
+• Access admin panel as normal user
+Fix:
+• Server-side role verification
+• Secure authorization checks
+
+Level 3: Data Tampering
+Demonstrates:
+• Lack of server-side validation
+Attack:
+• Modify request parameters
+• Change sensitive values
+Fix:
+• Input validation
+• Secure backend checks
+
+Level 4: Session Hijacking
+Demonstrates:
+• Weak session management
+Attack:
+• Reuse captured sessions
+Fix:
+• Secure cookies
+• Session expiration
+• HTTPOnly and IP-binding
+
+Level 5: Cross-Site Scripting (XSS)
+Demonstrates:
+• Unescaped user input rendered in the browser
+Attack:
+• Inject malicious scripts via input fields
+Fix:
+• Output encoding and input sanitization
+
+Level 6: SQL Injection
+Demonstrates:
+• String-concatenated database queries
+Attack:
+• Inject SQL to bypass queries or dump data
+Fix:
+• Parameterized queries
+
+Level 7: CSRF (Cross-Site Request Forgery)
+Demonstrates:
+• Forms accepted without origin verification
+Attack:
+• Forged requests submitted from attacker page
+Fix:
+• CSRF token validation on every POST
+
+Level 8: API / JWT Security
+Demonstrates:
+• Weak token issuance and missing signature checks
+Attack:
+• Bypass JWT verification with forged tokens
+Fix:
+• Signed JWTs with expiry, server-side validation
+
+5. Cryptography Integration
+All cryptographic demonstrations are built directly into the platform's interactive Crypto Lab,
+so no external tools are required.
+
+Hashing Demonstration
+• SHA-256: show raw digest of any input, compare plain text vs hashed output
+• bcrypt: demonstrate salted hashing and cost factor; compare to MD5 via rainbow table lookup
+• Entropy calculator: estimate password bit-strength based on character set and length
+
+RSA Demonstration
+• Generate a sample RSA key pair within the lab
+• Encrypt a plaintext message with the public key
+• Decrypt the ciphertext with the private key
+• Illustrate asymmetric communication principles
+
+Digital Signatures Demonstration
+• Sign a message using a private key
+• Verify the signature using the corresponding public key
+• Show what happens when the message or signature is tampered with
+
+Password Security Demonstration
+• Interactive strength meter with real-time scoring (length, uppercase, numbers, special chars)
+• Weak vs strong password comparison
+• Rainbow table simulation showing why unsalted hashes are dangerous
+
+Caesar Cipher and Base64
+• Step-by-step Caesar cipher encode/decode with configurable shift
+• Base64 encoding/decoding with explanation of why it is encoding, not encryption
+
+6. Technologies and Tools
+Category              Technology/Tool
+Backend               Flask (Python)
+Frontend              HTML, CSS, JavaScript, Bootstrap
+Database              SQLite
+Security Testing      Built-in attack simulators (brute-force, injection, CSRF, JWT bypass)
+Cryptography          Built-in Crypto Lab (SHA-256, bcrypt, RSA, digital signatures, Caesar, Base64)
+Version Control       Git/GitHub
+
+7. Project Workflow
+Phase 1: System Development
+• Create login and registration system
+• Implement admin/moderator/user roles
+• Develop restricted pages
+
+Phase 2: Vulnerability Implementation
+• Create intentionally insecure modules for all 8 levels
+• Add weak authentication and authorization mechanisms
+
+Phase 3: Attack Demonstration
+• Simulate brute-force, parameter tampering, session theft, XSS, SQLi, CSRF, JWT bypass
+• Show insecure vs secure side-by-side with live flow visualizations
+
+Phase 4: Security Enhancement
+• Implement secure coding practices
+• Add hashing, secure sessions, CSRF tokens, parameterized queries
+• Re-test all vulnerabilities in secure mode
+
+Phase 5: Cryptography Demonstration
+• Demonstrate SHA-256, bcrypt, RSA, digital signatures, and password strength
+• Show encoding vs encryption concepts (Base64, Caesar cipher)
+
+8. Expected Outcomes
+At the completion of the project:
+• Users will understand common web vulnerabilities
+• Users will learn how attacks are performed
+• Users will observe how security mechanisms prevent attacks
+• The project will provide practical exposure to:
+  • Access control
+  • Authentication
+  • Cryptography (hashing, RSA, digital signatures)
+  • Web attack simulation across 8 vulnerability levels
+
+9. Scope of the Project
+The project is educational and designed for learning purposes within a controlled environment.
+It will not target real systems or networks.
+The application will focus on:
+• Web application security concepts
+• Ethical attack simulation
+• Defensive programming techniques
+
+10. Conclusion
+The "Hacker vs System" project combines web development, cryptography, and ethical hacking
+concepts into a single interactive platform. The project not only fulfills the requirement of
+implementing role-based access control in a web application but also extends it by demonstrating
+real-world vulnerabilities and their secure solutions across 8 interactive levels, with a
+built-in Crypto Lab covering SHA-256 hashing, RSA encryption, digital signatures, and password
+security — all without requiring any external tools.
+This project will provide practical knowledge of both offensive and defensive security techniques
+and help strengthen understanding of information security principles.

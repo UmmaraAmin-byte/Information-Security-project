@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "ioNRxC6-ayzkO7brHA0A1"
+uri = "file://attached_assets/Project_Proposal_Final_Fixed.txt"
+type = "text"
+title = "Hacker vs System – Final Fixed Proposal"
