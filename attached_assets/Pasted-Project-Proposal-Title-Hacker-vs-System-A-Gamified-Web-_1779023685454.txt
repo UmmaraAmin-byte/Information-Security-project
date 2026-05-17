@@ -1,0 +1,156 @@
+Project Proposal
+Title: Hacker vs System – A Gamified Web Security Learning Platform
+Submitted By:
+Ummara Amin
+1. Introduction
+With the increasing dependence on web applications, security vulnerabilities such as weak authentication, improper access control, insecure session handling, and poor password storage have become major concerns. Many systems fail because developers implement functionality without considering security practices.
+This project aims to develop a gamified web application that demonstrates common web security vulnerabilities and their secure implementations. The system will allow users to observe how attacks are performed on insecure systems and how proper security mechanisms can prevent them.
+2. Project Objectives
+The main objectives of this project are:
+1.	To develop a web application with: 
+•	User authentication 
+•	Role-based access control 
+•	Restricted pages for admins and users 
+2.	To demonstrate common web vulnerabilities including: 
+•	Login bypass 
+•	Broken Access Control
+•	Session hijacking 
+•	Data tampering
+3.	To perform attack simulations using Burp Suite 
+4.	To implement secure solutions using: 
+•	Password hashing 
+•	Secure session management 
+•	Proper authorization checks 
+1.	To demonstrate cryptographic concepts such as: 
+•	Hashing 
+•	RSA encryption 
+•	Digital signatures 
+3. Proposed System
+The proposed system is a “Hacker vs System” platform where users can interact with different security levels.
+Each level demonstrates:
+1.	An insecure implementation 
+2.	How the vulnerability is exploited 
+3.	A secure implementation preventing the attack 
+The project will include three user roles:
+•	Admin 
+•	Moderator
+•	User 
+Access to pages and functionalities will depend on user roles.
+4. System Modules
+4.1 Authentication Module
+Features:
+•	User registration 
+•	User login 
+•	Password validation 
+•	Session handling 
+Security Features:
+•	Password hashing 
+•	Secure login verification 
+4.2 Role-Based Access Control Module
+Features:
+•	Admin dashboard 
+•	User dashboard 
+•	Restricted routes/pages 
+Examples:
+•	Only admins can access: 
+•	User management 
+•	Sensitive controls 
+•	Normal users cannot access admin functionalities 
+4.3 Vulnerability Demonstration Levels
+Level 1: Login Bypass
+Demonstrates:
+•	Weak authentication mechanisms 
+•	Improper validation 
+Fix:
+•	Secure password verification 
+•	Proper authentication logic 
+Level 2: Role Escalation
+Demonstrates:
+•	Improper role handling 
+Attack:
+•	Modify role values in requests/cookies 
+•	Access admin panel as normal user 
+Fix:
+•	Server-side role verification 
+•	Secure authorization checks 
+Level 3: Data Tampering
+Demonstrates:
+•	Lack of server-side validation 
+Attack:
+•	Modify request parameters 
+•	Change sensitive values 
+Fix:
+•	Input validation 
+•	Secure backend checks 
+Level 4: Session Hijacking
+Demonstrates:
+•	Weak session management 
+Attack:
+•	Reuse captured sessions 
+Fix:
+•	Secure cookies 
+•	Session expiration 
+•	HTTPOnly implementation 
+5. Cryptography Integration
+Hashing Demonstration
+Using CrypTool:
+•	Demonstrate SHA-256 hashing 
+•	Compare plain text vs hashed passwords 
+RSA Demonstration
+Using CrypTool:
+•	Encrypt/decrypt sample messages 
+•	Demonstrate secure communication principles 
+Password Security Demonstration
+Using KeePass:
+•	Demonstrate secure password storage 
+•	Compare weak and strong passwords 
+6. Technologies and Tools
+Category	Technology/Tool
+Backend	Flask (Python) or Express.js
+Frontend	HTML, CSS, JavaScript
+Database	SQLite / MySQL
+Security Testing	Burp Suite
+Cryptography	CrypTool
+Password Management	KeePass
+Version Control	Git/GitHub
+
+7. Project Workflow
+Phase 1 : System Development
+•	Create login and registration system 
+•	Implement admin/user roles 
+•	Develop restricted pages 
+Phase 2 : Vulnerability Implementation
+•	Create intentionally insecure modules 
+•	Add weak authentication and authorization mechanisms 
+Phase 3 : Attack Demonstration
+•	Intercept requests 
+•	Modify parameters 
+•	Demonstrate exploits 
+Phase 4 : Security Enhancement
+•	Implement secure coding practices 
+•	Add hashing and secure sessions 
+•	Re-test vulnerabilities 
+Phase 5 : Cryptography Demonstration
+•	Demonstrate hashing and RSA 
+•	Show password security concepts 
+8. Expected Outcomes
+At the completion of the project:
+•	Users will understand common web vulnerabilities 
+•	Users will learn how attacks are performed 
+•	Users will observe how security mechanisms prevent attacks 
+•	The project will provide practical exposure to: 
+•	Access control 
+•	Authentication 
+•	Cryptography 
+•	Web penetration testing 
+9. Scope of the Project
+The project is educational and designed for learning purposes within a controlled environment. It will not target real systems or networks.
+The application will focus on:
+•	Web application security concepts 
+•	Ethical attack simulation 
+•	Defensive programming techniques 
+
+10. Conclusion
+The “Hacker vs System” project combines web development, cryptography, and ethical hacking concepts into a single interactive platform. The project not only fulfills the requirement of implementing role-based access control in a web application but also extends it by demonstrating real-world vulnerabilities and their secure solutions.
+This project will provide practical knowledge of both offensive and defensive security techniques and help strengthen understanding of information security principles.
+
