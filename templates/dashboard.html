@@ -150,7 +150,7 @@
     </div>
 
     <!-- Threat feed -->
-    {% if role in ['admin', 'moderator'] and anomalies.suspicious_ips %}
+    {% if effective_role in ['admin', 'moderator'] and anomalies.suspicious_ips %}
     <div class="col-md-6">
       <div class="hacker-panel">
         <div class="panel-header" style="color:var(--red)"><i class="fas fa-crosshairs"></i> SUSPICIOUS IPs — LAST 15 MIN</div>
@@ -166,7 +166,7 @@
     </div>
     {% endif %}
 
-    {% if role in ['admin', 'moderator'] and anomalies.locked_accounts %}
+    {% if effective_role in ['admin', 'moderator'] and anomalies.locked_accounts %}
     <div class="col-md-6">
       <div class="hacker-panel">
         <div class="panel-header" style="color:var(--yellow)"><i class="fas fa-ban"></i> LOCKED ACCOUNTS</div>

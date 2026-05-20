@@ -162,8 +162,34 @@ def add_session_event(username, event_type, detail='', ip=None):
 def get_secure_mode():
     return session.get('secure_mode', False)
 
+def get_effective_role():
+    """In secure mode, trust only the server-side session role.
+    In insecure mode, trust the client cookie — demonstrating privilege escalation."""
+    if get_secure_mode():
+        return session.get('role', 'user')
+    return request.cookies.get('role', session.get('role', 'user'))
+
 def get_client_ip():
     return request.headers.get('X-Forwarded-For', request.remote_addr)
+
+@app.context_processor
+def inject_role_context():
+    """Inject role breakdown into every template automatically."""
+    if 'user_id' not in session:
+        return {}
+    secure = get_secure_mode()
+    session_role = session.get('role', 'user')
+    db_role = session.get('db_role', session_role)
+    cookie_role = request.cookies.get('role', session_role)
+    effective_role = session_role if secure else cookie_role
+    role_tampered = (not secure) and (cookie_role != session_role)
+    return dict(
+        effective_role=effective_role,
+        session_role=session_role,
+        db_role=db_role,
+        cookie_role=cookie_role,
+        role_tampered=role_tampered,
+    )
 
 # ─────────────────────────── Permission Decorators ─────────────────────────
 
@@ -183,26 +209,40 @@ def permission_required(permission):
             if 'user_id' not in session:
                 return redirect(url_for('login'))
             secure = get_secure_mode()
-            role = session.get('role', 'user')
+            session_role = session.get('role', 'user')
+            db_role = session.get('db_role', session_role)
+            cookie_role = request.cookies.get('role', session_role)
+            effective_role = session_role if secure else cookie_role
+            username = session.get('username', 'unknown')
+
             if secure:
-                user_perms = ROLE_PERMISSIONS.get(role, [])
+                user_perms = ROLE_PERMISSIONS.get(effective_role, [])
                 if permission not in user_perms:
-                    add_log(f'Permission denied: {permission} for {session.get("username")}',
-                            'DANGER', 'ACCESS_CONTROL')
+                    add_log(
+                        f'[SECURE] Permission denied: {permission} | '
+                        f'db_role={db_role} session_role={session_role} '
+                        f'effective_role={effective_role} | user={username}',
+                        'DANGER', 'ACCESS_CONTROL')
                     return render_template('access_denied.html', secure=secure,
                                            required_permission=permission,
-                                           user_role=role), 403
+                                           user_role=effective_role), 403
             else:
-                cookie_role = request.cookies.get('role', role)
-                user_perms = ROLE_PERMISSIONS.get(cookie_role, [])
+                user_perms = ROLE_PERMISSIONS.get(effective_role, [])
                 if permission not in user_perms:
-                    add_log(f'[INSECURE] Cookie role {cookie_role} lacks {permission}',
-                            'DANGER', 'ACCESS_CONTROL')
+                    add_log(
+                        f'[INSECURE] Permission denied: {permission} | '
+                        f'db_role={db_role} session_role={session_role} '
+                        f'cookie_role={cookie_role} effective_role={effective_role} | user={username}',
+                        'DANGER', 'ACCESS_CONTROL')
                     return render_template('access_denied.html', secure=secure,
                                            required_permission=permission,
-                                           user_role=cookie_role), 403
-                add_log(f'[INSECURE] Granted {permission} via cookie role={cookie_role}',
-                        'WARNING', 'ACCESS_CONTROL')
+                                           user_role=effective_role), 403
+                add_log(
+                    f'[INSECURE] Permission GRANTED: {permission} | '
+                    f'db_role={db_role} session_role={session_role} '
+                    f'cookie_role={cookie_role} effective_role={effective_role} | user={username}'
+                    + (' [ESCALATED via cookie tamper]' if cookie_role != session_role else ''),
+                    'WARNING', 'ACCESS_CONTROL')
             return f(*args, **kwargs)
         return decorated
     return decorator
@@ -590,15 +630,15 @@ def dashboard():
     db = get_db()
     logs = db.execute("SELECT * FROM logs ORDER BY timestamp DESC LIMIT 30").fetchall()
     users_count = db.execute("SELECT COUNT(*) as c FROM users").fetchone()['c']
-    role = session.get('role', 'user')
-    perms = ROLE_PERMISSIONS.get(role, [])
+    eff_role = get_effective_role()
+    perms = ROLE_PERMISSIONS.get(eff_role, [])
     anomalies = get_anomalies()
     threat_count = len(anomalies['suspicious_ips']) + len(anomalies['locked_accounts'])
     sec_score = compute_security_score()
 
     return render_template('dashboard.html',
                            username=session.get('username'),
-                           role=role,
+                           role=eff_role,
                            permissions=perms,
                            secure=secure,
                            logs=logs,
@@ -667,7 +707,7 @@ def manage_user():
 def levels():
     return render_template('levels.html', secure=get_secure_mode(),
                            username=session.get('username'),
-                           role=session.get('role'))
+                           role=get_effective_role())
 
 
 @app.route('/security-dashboard')
@@ -709,7 +749,7 @@ def crypto_lab():
     sha1_hash = hashlib.sha1(sample_clean.encode()).hexdigest()
     bcrypt_hash = bcrypt.hashpw(sample_clean.encode(), bcrypt.gensalt(rounds=10)).decode()
 
-    payload = {'sub': session.get('username'), 'role': session.get('role'),
+    payload = {'sub': session.get('username'), 'role': get_effective_role(),
                'exp': datetime.utcnow() + timedelta(hours=1)}
     jwt_token = jwt.encode(payload, JWT_SECRET, algorithm='HS256')
 
@@ -943,46 +983,54 @@ def csrf_demo():
 @login_required
 def rbac_demo():
     secure = get_secure_mode()
-    role = session.get('role', 'user')
-    db_role = session.get('db_role', role)
-    cookie_role = request.cookies.get('role', role)
+    session_role = session.get('role', 'user')
+    db_role = session.get('db_role', session_role)
+    cookie_role = request.cookies.get('role', session_role)
+    eff_role = get_effective_role()
     result = None
 
     if request.method == 'POST':
         requested_perm = request.form.get('permission', 'access_admin')
         if secure:
-            server_role = session.get('role', 'user')
-            granted = requested_perm in ROLE_PERMISSIONS.get(server_role, [])
+            granted = requested_perm in ROLE_PERMISSIONS.get(eff_role, [])
             result = {
-                'role': server_role, 'permission': requested_perm,
+                'role': eff_role, 'permission': requested_perm,
                 'granted': granted, 'source': 'server-side session (tamper-proof)',
                 'color': 'success' if granted else 'danger',
                 'status': 'GRANTED' if granted else 'DENIED',
                 'cookie_role': cookie_role,
-                'session_role': server_role,
+                'session_role': session_role,
                 'db_role': db_role,
-                'effective_role': server_role,
-                'tampered': cookie_role != server_role
+                'effective_role': eff_role,
+                'tampered': cookie_role != session_role
             }
-            add_log(f'[SECURE] RBAC check: {server_role} → {requested_perm} = {"GRANT" if granted else "DENY"}',
-                    'INFO' if granted else 'DANGER', 'ACCESS_CONTROL')
+            add_log(
+                f'[SECURE] RBAC check: {requested_perm} = {"GRANT" if granted else "DENY"} | '
+                f'db_role={db_role} session_role={session_role} '
+                f'cookie_role={cookie_role} effective_role={eff_role}',
+                'INFO' if granted else 'DANGER', 'ACCESS_CONTROL')
         else:
-            granted = requested_perm in ROLE_PERMISSIONS.get(cookie_role, [])
+            granted = requested_perm in ROLE_PERMISSIONS.get(eff_role, [])
+            escalated = cookie_role != session_role
             result = {
-                'role': cookie_role, 'permission': requested_perm,
+                'role': eff_role, 'permission': requested_perm,
                 'granted': granted, 'source': 'client cookie (tamperable!)',
                 'color': 'warning' if granted else 'danger',
-                'status': 'GRANTED (via cookie)' if granted else 'DENIED',
+                'status': ('GRANTED [ESCALATED via cookie]' if escalated else 'GRANTED (via cookie)') if granted else 'DENIED',
                 'cookie_role': cookie_role,
-                'session_role': role,
+                'session_role': session_role,
                 'db_role': db_role,
-                'effective_role': cookie_role,
-                'tampered': cookie_role != role
+                'effective_role': eff_role,
+                'tampered': escalated
             }
-            add_log(f'[INSECURE] Cookie RBAC: role={cookie_role} → {requested_perm} = {"GRANT" if granted else "DENY"}',
-                    'WARNING', 'ACCESS_CONTROL')
+            add_log(
+                f'[INSECURE] RBAC check: {requested_perm} = {"GRANT" if granted else "DENY"} | '
+                f'db_role={db_role} session_role={session_role} '
+                f'cookie_role={cookie_role} effective_role={eff_role}'
+                + (' [ESCALATED via cookie tamper]' if escalated else ''),
+                'WARNING', 'ACCESS_CONTROL')
 
-    return render_template('rbac_demo.html', secure=secure, role=role,
+    return render_template('rbac_demo.html', secure=secure, role=eff_role,
                            cookie_role=cookie_role, db_role=db_role,
                            result=result, role_permissions=ROLE_PERMISSIONS,
                            role_hierarchy=ROLE_HIERARCHY)
@@ -1040,7 +1088,7 @@ def api_lab():
     secure = get_secure_mode()
     return render_template('api_lab.html', secure=secure,
                            username=session.get('username'),
-                           role=session.get('role'))
+                           role=get_effective_role())
 
 
 @app.route('/toggle-mode', methods=['POST'])
