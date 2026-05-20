@@ -1,0 +1,975 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PROJECT REPORT
+Hacker vs System — A Gamified Web Security Learning Platform
+Submitted By: Ummara Amin
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+════════════════════════════════════════════════════════════════════════════════
+1. EXECUTIVE SUMMARY
+════════════════════════════════════════════════════════════════════════════════
+
+Hacker vs System is a fully interactive, web-based cybersecurity education
+platform built using Python and Flask. The platform teaches web security
+concepts by letting users experience both sides of a security scenario: they
+can act as an attacker exploiting a vulnerable system, and then switch to
+seeing how those same attacks are stopped by a properly secured system.
+
+The project covers eight real-world vulnerability categories — from weak
+passwords and broken access control all the way to SQL injection, cross-site
+scripting, CSRF attacks, and insecure APIs. Every vulnerability is demonstrated
+live inside the browser, with step-by-step visual explanations, so users do not
+need any external tools or prior hacking experience.
+
+The platform also includes a full Cryptography Lab where users interact with
+hashing algorithms (MD5, SHA-1, SHA-256, SHA-512, bcrypt), Base64 encoding,
+Caesar cipher, JWT tokens, password strength analysis, and rainbow table
+demonstrations — all from within the app itself.
+
+A live Security Operations Centre (SOC) dashboard tracks every action in real
+time, showing a security score, threat alerts, anomaly detection, and a full
+audit log. The system runs in two modes — Attack Mode (insecure, vulnerable)
+and Secure Mode (hardened, patched) — and users can toggle between them at any
+point to immediately see the difference a security fix makes.
+
+Key facts:
+  - 8 vulnerability levels, each with a live exploit and a live secure fix
+  - Full Crypto Lab with 7 cryptographic demonstrations
+  - Live security score (0-100) recalculated in real time
+  - Complete audit log of every user action
+  - Role-based access control with 4 roles: guest, user, moderator, admin
+  - Built entirely in Python and Flask — no external security tools required
+
+
+════════════════════════════════════════════════════════════════════════════════
+2. PROJECT OVERVIEW
+════════════════════════════════════════════════════════════════════════════════
+
+2.1 Purpose
+-----------
+This project was built to solve a problem in security education: reading about
+SQL injection in a textbook is very different from typing a malicious input
+yourself and watching the database leak data in real time — and then seeing why
+a parameterized query makes that same input completely harmless.
+
+Hacker vs System provides exactly that experience. It is a safe, controlled
+environment where every attack is simulated against itself. No real systems are
+involved. Users learn by doing, not just by reading.
+
+2.2 Who It Is For
+-----------------
+The platform is designed for:
+  - Students learning web application security for the first time
+  - Developers who want to understand what makes their code vulnerable
+  - Security trainees who want hands-on exposure to real attack types
+  - Anyone preparing for ethical hacking or penetration testing coursework
+
+2.3 What Makes It Different
+----------------------------
+Unlike static slideshows or theory-only lectures, this platform:
+  - Runs every attack live in the browser — real results, not screenshots
+  - Shows the exact code change that fixes each vulnerability, side by side
+  - Displays step-by-step flow diagrams breaking down what happens at each
+    stage of an attack or a defence
+  - Includes collapsible "Learn More" panels on every page explaining the
+    concept in plain language
+  - Keeps a real audit log so users can see their own attack attempts recorded
+    as security events
+  - Works with Burp Suite for users who want to go further and intercept live
+    HTTP requests mid-flight
+
+2.4 Scope
+---------
+The project is entirely educational and operates within a self-contained
+environment. It does not connect to any external services or real databases
+beyond its own local SQLite file. All attacks run against the platform itself.
+
+
+════════════════════════════════════════════════════════════════════════════════
+3. SYSTEM ARCHITECTURE
+════════════════════════════════════════════════════════════════════════════════
+
+3.1 Technology Stack
+--------------------
+
+  Layer            Technology          Purpose
+  -----------------------------------------------------------------------
+  Backend          Python 3.11         Core language
+  Web Framework    Flask               Routing, sessions, templates
+  Database         SQLite              Persistent storage (single file)
+  Password Hash    bcrypt              Secure password hashing
+  API Tokens       PyJWT               JWT generation and verification
+  Server           Gunicorn            Production-grade WSGI server
+  Frontend         HTML5 + Bootstrap 5 Layout and responsive design
+  Styling          Custom CSS          Dark cyberpunk theme (1,300+ lines)
+  Icons            Font Awesome 6      UI icons throughout the interface
+  JavaScript       Vanilla JS          Loading screen, animations, panels
+
+3.2 File Structure
+------------------
+
+  main.py                    All backend logic (1,314 lines)
+                             Routes, helpers, APIs, database setup
+
+  hacker_vs_system.db        SQLite database (auto-created on first run)
+
+  requirements.txt           Python dependencies
+
+  templates/
+    base.html                Master layout: nav bar, loading screen,
+                             scanlines, mode toggle button
+    login.html               Login with attempt meter, brute-force sim,
+                             lockout countdown, escalation banner
+    register.html            Registration with live password strength
+    dashboard.html           SOC panel — score circle, logs, threat feed
+    levels.html              Mission select — all 8 level cards + Burp
+                             Suite callout
+    admin.html               Admin panel — user table, role/lock controls
+    security_dashboard.html  SecOps view for moderator and admin
+    access_denied.html       403 page with permission context
+    parameter_tamper.html    Level 3 — parameter tampering
+    session_demo.html        Level 4 — session hijacking + timeline
+    rbac_demo.html           Level 2 — role escalation, 3-way comparison
+    xss_demo.html            Level 5 — XSS injection demo
+    sqli_demo.html           Level 6 — SQL injection with live query
+    csrf_demo.html           Level 7 — CSRF attack, two-panel view
+    api_lab.html             Level 8 — JWT structure, API tester
+    crypto_lab.html          Crypto Lab — all cryptographic tools
+
+  static/
+    css/style.css            Full cyberpunk stylesheet
+    js/main.js               Loading screen, matrix rain, score animation,
+                             learning panel toggle (toggleLearn)
+
+3.3 How the Application Starts
+-------------------------------
+When the server starts, Flask runs init_db() which:
+  1. Creates the SQLite database file if it does not exist
+  2. Creates all five tables: users, logs, api_tokens, csrf_log,
+     session_events
+  3. Seeds three default accounts (admin, moderator, demo) with
+     bcrypt-hashed passwords if they do not already exist
+  4. The server then listens on port 5000 and serves all requests
+
+3.4 Request Lifecycle
+---------------------
+Every HTTP request follows this path:
+  1. Flask matches the URL to the correct route in main.py
+  2. If the route has @login_required, the user must have a valid session
+     cookie — otherwise they are redirected to /login
+  3. If the route has @permission_required, the user's role is checked
+     against the permission list — in secure mode this uses the server-side
+     session role; in insecure mode it trusts the client cookie
+  4. The route function runs its logic (querying the database, processing
+     form data, computing results)
+  5. Every significant action is written to the logs table via add_log()
+  6. The route renders an HTML template and returns it to the browser
+
+3.5 Session Management
+----------------------
+Sessions are stored server-side using Flask's signed cookie mechanism.
+The session contains: user_id, username, role, db_role (ground truth from
+database), secure_mode flag, bound_ip (login IP for binding), login_time,
+csrf_token, and escalation_detected flag.
+
+Sessions expire after 30 minutes of inactivity.
+
+
+════════════════════════════════════════════════════════════════════════════════
+4. MODULES
+════════════════════════════════════════════════════════════════════════════════
+
+────────────────────────────────────────────────────────────────────────────
+4.1 AUTHENTICATION MODULE  (/login, /register, /logout)
+────────────────────────────────────────────────────────────────────────────
+
+Handles everything related to logging in, registering, and logging out.
+
+LOGIN — Secure Mode
+  1. CSRF token in the form is compared to the session token. Mismatch
+     immediately rejects the request and logs it as a CSRF attack.
+  2. The username is looked up in the database.
+  3. If the account is locked, a countdown timer and lockout bar are shown.
+     Login is refused until the lockout expires.
+  4. If not locked, bcrypt.checkpw() compares the submitted password to the
+     stored hash.
+  5. A wrong password increments the failed_attempts counter. After 3
+     failures, the account locks for 15 minutes.
+  6. On success: session created with role from database, IP recorded for
+     binding, failed_attempts reset to zero.
+
+LOGIN — Attack Mode (Insecure)
+  - No CSRF check
+  - No account lockout — unlimited attempts
+  - The role field in the form body is accepted directly — posting
+    role=admin sets the session to admin without any database check
+  - All events logged as WARNING to reflect the insecure state
+
+ATTEMPT METER
+  After a failed attempt in secure mode, a row of coloured pips appears
+  showing how many of the 3 allowed attempts have been used.
+
+BRUTE-FORCE SIMULATION
+  The login page has a built-in simulator that calls /api/brute-force and
+  runs six common passwords against a target account:
+  - Secure: after 3 wrong attempts the account locks and the simulator
+    stops, showing BLOCKED for all remaining passwords
+  - Insecure: all six run without interruption, no lockout ever applies,
+    any correct password is marked CRACKED
+
+REGISTRATION
+  Secure mode: username rules (3-20 chars, alphanumeric), password must
+  score 3/4 on the strength checker, CSRF token validated, password stored
+  as bcrypt hash.
+  Insecure mode: no validation rules, no strength requirement, no CSRF
+  check, password still bcrypt-hashed (storage is always safe; the weakness
+  is the lack of input controls).
+
+LOGOUT
+  Clears the entire session, logs the event, records a session_events entry,
+  redirects to login.
+
+────────────────────────────────────────────────────────────────────────────
+4.2 ROLE-BASED ACCESS CONTROL MODULE
+────────────────────────────────────────────────────────────────────────────
+
+Controls who can access what based on their role.
+
+Four Roles (in order of privilege):
+  guest       — no permissions (placeholder, not a usable login role)
+  user        — view dashboard, missions, use exploit demos
+  moderator   — all user permissions + view logs + access SecOps dashboard
+  admin       — all permissions including user management, admin panel,
+                API token generation, and full crypto lab access
+
+Permissions:
+  view_dashboard, view_levels, use_exploits, view_logs,
+  view_security_dashboard, manage_users, manage_roles,
+  access_admin, access_api, access_crypto_lab
+
+How Checks Work:
+  @login_required     — checks that a session exists
+  @permission_required — checks role against the permission list
+
+  Secure mode: role is read from the server-side session (set from the
+  database at login time; client cannot change this).
+
+  Insecure mode: role is read from the browser cookie named "role". Because
+  cookies are client-controlled, a user can edit role=user to role=admin in
+  their browser or through Burp Suite and the server trusts it.
+
+Escalation Detection:
+  If a user tampers with their role cookie in insecure mode and then
+  switches to secure mode, the system compares session role to database
+  role. If they differ, the session role is restored from the database, a
+  DANGER log entry is written, and a red banner confirms the tamper was
+  caught and reversed.
+
+────────────────────────────────────────────────────────────────────────────
+4.3 VULNERABILITY LEVELS — ALL EIGHT
+────────────────────────────────────────────────────────────────────────────
+
+Every level page contains: a description, an interactive form, a real-time
+flow diagram, a colour-coded result panel, and a collapsible Learn More panel.
+
+LEVEL 1 — WEAK AUTHENTICATION  (/login)
+  Insecure: no lockout, no CSRF, role field accepted from form body,
+  brute-force simulation runs without interruption.
+  Secure: bcrypt verification, 3-attempt lockout with 15-minute freeze,
+  CSRF token required, session bound to login IP.
+
+LEVEL 2 — BROKEN ACCESS CONTROL  (/exploit/rbac-demo)
+  Insecure: the "role" browser cookie is trusted by the server; editing it
+  from user to admin grants admin access instantly.
+  Secure: role is read exclusively from the server-side session; cookie
+  changes have no effect. A 3-way comparison panel shows Cookie Role vs
+  Session Role vs Database Role to make the discrepancy visible.
+
+LEVEL 3 — PARAMETER TAMPERING  (/exploit/parameter-tamper)
+  Insecure: a transaction form accepts any value including negative numbers,
+  numbers above any sensible limit, or plain text strings.
+  Secure: the server enforces that the value must be numeric and must fall
+  within the range 0 to 10,000. Both checks are shown as flow steps.
+
+LEVEL 4 — SESSION HIJACKING  (/exploit/session-demo)
+  Insecure: session cookie has no HttpOnly or SameSite flags, no IP binding,
+  no expiry enforced. Session details are fully exposed on screen.
+  Secure: HttpOnly and SameSite=Strict flags applied, session is bound to
+  the IP used at login. A full session timeline shows every session event
+  (login, view, logout) from the session_events table.
+
+LEVEL 5 — CROSS-SITE SCRIPTING (XSS)  (/exploit/xss-demo)
+  Insecure: user input is rendered onto the page using Jinja2's |safe
+  filter, meaning HTML and script tags execute in the browser.
+  Entering <script>alert('hacked')</script> runs the script live.
+  Secure: html.escape() converts all special characters to HTML entities
+  before rendering. The same payload appears as harmless plain text.
+
+LEVEL 6 — SQL INJECTION  (/exploit/sqli-demo)
+  Insecure: the username search concatenates user input directly into the
+  SQL query string. Entering ' OR '1'='1 returns all users. Entering
+  ' UNION SELECT … can dump the password hash column.
+  The actual executed SQL query and all returned rows are shown on screen.
+  Secure: parameterized queries are used. The ? placeholder passes input
+  as a data value, never as SQL code. The same injection string returns
+  zero results.
+
+LEVEL 7 — CSRF SIMULATION  (/exploit/csrf-demo)
+  Insecure: POST requests are accepted from any origin with no token check.
+  Clicking the "Forged Request" button submits a cross-origin form and the
+  action executes normally.
+  Secure: every form submission must carry the session's CSRF token. A
+  forged request carries the string FORGED_INVALID_TOKEN_12345 which does
+  not match the session — it is rejected immediately. The page shows a
+  "Victim's Browser" panel and an "Attacker's Page" panel side by side.
+
+LEVEL 8 — API SECURITY / JWT LAB  (/api-lab)
+  Insecure: /api/protected accepts any token including no token at all,
+  a set of hardcoded bypass strings (admin, password, 00000000, bypass),
+  or JWTs with alg=none to skip signature verification.
+  Secure: JWTs are signed with HMAC-SHA256. Every request verifies the
+  signature, checks expiry, and validates the role claim. The token is
+  shown split into header, payload, and signature with each part decoded.
+  A built-in API tester lets users paste any token and see the live result.
+
+────────────────────────────────────────────────────────────────────────────
+4.4 CRYPTOGRAPHY LAB  (/crypto-lab)
+────────────────────────────────────────────────────────────────────────────
+
+An interactive standalone tool. Users type any text and all tools update
+on the same page.
+
+Password Strength Analyzer
+  Scores 0-4 based on: 8+ chars, uppercase, number, special character.
+  Colour progress bar from red to green. Chips for each criterion.
+  Entropy estimate in bits.
+
+Hashing Algorithms (all computed simultaneously on the input)
+  MD5     — 32-char hex digest (shown as insecure, breaks rainbow tables)
+  SHA-1   — 40-char hex digest (deprecated)
+  SHA-256 — 64-char hex digest (industry standard)
+  SHA-512 — 128-char hex digest (high security)
+  bcrypt  — 60-char salted hash, cost factor 10 (recommended for passwords)
+
+Rainbow Table Demonstration
+  Five common passwords (password, 123456, admin, letmein, qwerty) are
+  pre-computed with their MD5 and SHA-256 hashes. If the input matches
+  any of them, a "RAINBOW TABLE HIT" banner reveals the original password.
+  This shows why unsalted hashes are dangerous — attackers can reverse them
+  instantly using a pre-built lookup. bcrypt defeats this because it embeds
+  a unique random salt in every hash.
+
+Caesar Cipher
+  Classic letter-shift cipher with a configurable shift value (1-25).
+  Shows the encrypted text, the decrypted text, and a step-by-step table
+  for each character. Demonstrates symmetric encryption (same key to
+  encrypt and decrypt) and shows how weak simple substitution ciphers are
+  — only 25 shifts need to be tried to break any message.
+
+Base64 Encoding
+  Encodes input to Base64 and attempts to decode the input as Base64.
+  A prominent note explains that Base64 is encoding, not encryption —
+  anyone with the output can reverse it instantly without any key. This
+  addresses a very common misconception.
+
+JWT Breakdown
+  Generates a real JWT for the current logged-in user and displays it split
+  into its three dot-separated parts, each decoded and labelled. Connects
+  directly to Level 8 and helps users understand what API tokens contain.
+
+────────────────────────────────────────────────────────────────────────────
+4.5 ADMIN PANEL  (/admin)
+────────────────────────────────────────────────────────────────────────────
+
+Accessible to admin role only. Shows all registered users with: username,
+role, failed attempt count, lockout status, last login time, last known IP.
+
+Admin actions:
+  - Change any user's role (guest / user / moderator / admin)
+  - Manually lock an account (applies a 1-hour lockout)
+  - Unlock an account (clears failed_attempts and lockout time)
+
+All actions are CSRF-protected in secure mode and logged to the audit log.
+
+────────────────────────────────────────────────────────────────────────────
+4.6 SOC DASHBOARD  (/dashboard)
+────────────────────────────────────────────────────────────────────────────
+
+The main landing page after login.
+
+Status Bar: system status (HARDENED or COMPROMISED), username, clearance
+level, total registered users, active threat count, live clock.
+
+Security Score Circle: SVG gauge 0-100. Green (80+, LOW risk), yellow
+(50-79, MEDIUM), red (0-49, HIGH). Deductions shown below the circle:
+insecure mode -30, each DANGER event in last hour -3 (max -25), each
+locked account -5, each CSRF block -2 (max -10).
+
+Permission Display: the current user's permissions shown as coloured badges.
+
+Audit Log Feed: last 30 events in reverse order with timestamp, level,
+category, and message. Auto-refreshes every 5 seconds.
+
+Threat Alerts: if suspicious IPs or locked accounts are detected, a red
+banner appears linking to the SecOps dashboard.
+
+Escalation Banner: if a role tamper was caught on mode switch, a warning
+banner appears confirming the session was restored.
+
+
+════════════════════════════════════════════════════════════════════════════════
+5. SECURITY DASHBOARD (SECOPS)  (/security-dashboard)
+════════════════════════════════════════════════════════════════════════════════
+
+Restricted to moderator and admin roles. Provides a deeper threat view.
+
+Aggregate Statistics:
+  Total successful logins, total failed logins, total CSRF blocks, total
+  access-denied events — all time from the database.
+
+Anomaly Detection (last 15 minutes):
+  Suspicious IPs — any IP with 3 or more failed login attempts in the
+  last 15 minutes is flagged, showing the IP and attempt count. This is
+  how real security teams spot brute-force attacks.
+
+  Targeted Accounts — any username with 3 or more recent failed attempts
+  is flagged, identifying password-spray or targeted account attacks.
+
+  Currently Locked Accounts — all accounts with active lockouts, showing
+  the unlock time for each.
+
+Recent Danger Events:
+  The last 50 WARNING and DANGER level log entries in full detail:
+  timestamp, level, category, message, IP address, username.
+
+Event Category Breakdown:
+  Count of log entries per category (AUTH, SESSION, CSRF, ACCESS_CONTROL,
+  API, ATTACK, BRUTE_FORCE, etc.) for an overview of all activity.
+
+All data is live — reflects the actual database state at page load time.
+
+
+════════════════════════════════════════════════════════════════════════════════
+6. ATTACK MODE vs SECURE MODE
+════════════════════════════════════════════════════════════════════════════════
+
+6.1 What the Toggle Does
+-------------------------
+A button in the navigation bar flips the secure_mode flag in the session.
+All subsequent requests behave according to the new mode immediately. The
+nav badge changes between SECURE (green shield) and COMPROMISED (red skull).
+
+6.2 Side-by-Side Comparison
+-----------------------------
+
+Feature                  | ATTACK MODE (Insecure)        | SECURE MODE
+────────────────────────────────────────────────────────────────────────────
+Password verification    | No lockout, unlimited retries  | 3 attempts, 15-min lockout
+CSRF protection          | No token required              | Token validated on every POST
+Role source              | Client cookie (tamperable)     | Server session (tamper-proof)
+Session IP binding       | None                           | Session bound to login IP
+Session cookie flags     | No HttpOnly, no SameSite       | HttpOnly + SameSite=Strict
+SQL queries              | String concatenation           | Parameterized queries only
+HTML output              | Raw unsanitized (XSS possible) | html.escape() applied
+API tokens               | No signature check, any token  | Signed JWT, signature verified
+Parameter validation     | No type or range checks        | Type enforcement + range checks
+Registration validation  | No rules enforced              | Username rules + strength check
+
+6.3 Role Restoration on Mode Switch
+-------------------------------------
+If a user tampers with their role cookie in insecure mode and switches to
+secure mode, the system compares session role to database role. If they
+differ, the session role is silently restored to the correct database value,
+a DANGER log entry is written, and an escalation banner appears on both the
+login page and the dashboard confirming the tamper was detected and reversed.
+
+6.4 Visual Changes
+-------------------
+In Attack Mode: body class "insecure-mode", level cards show VULNERABLE
+and a skull icon, buttons glow red/orange, mode badge shows COMPROMISED.
+In Secure Mode: body class "secure-mode", level cards show PATCHED and a
+shield icon, buttons glow green, mode badge shows SECURE.
+
+
+════════════════════════════════════════════════════════════════════════════════
+7. DATABASE DESIGN
+════════════════════════════════════════════════════════════════════════════════
+
+Database: hacker_vs_system.db (SQLite, auto-created on first run)
+All queries use raw sqlite3 with parameterized statements. No ORM is used.
+
+────────────────────────────────────────────────────────────────────────────
+TABLE: users
+────────────────────────────────────────────────────────────────────────────
+Stores every registered account.
+
+  Column           Type      Description
+  ─────────────────────────────────────────────────────────────────────
+  id               INTEGER   Primary key, auto-incremented
+  username         TEXT      Unique username
+  password         TEXT      bcrypt hash (60 chars, includes salt)
+  role             TEXT      guest / user / moderator / admin
+  failed_attempts  INTEGER   Count of consecutive wrong passwords
+  locked_until     DATETIME  NULL if not locked; future datetime if locked
+  created_at       DATETIME  Account creation timestamp
+  last_login       DATETIME  Most recent successful login time
+  last_ip          TEXT      IP address of most recent login
+
+────────────────────────────────────────────────────────────────────────────
+TABLE: logs
+────────────────────────────────────────────────────────────────────────────
+Stores every security event generated anywhere in the application.
+
+  Column      Type      Description
+  ─────────────────────────────────────────────────────────────────────
+  id          INTEGER   Primary key
+  message     TEXT      Human-readable description of the event
+  level       TEXT      SUCCESS / INFO / WARNING / DANGER
+  category    TEXT      AUTH / SESSION / CSRF / ACCESS_CONTROL /
+                        API / ATTACK / BRUTE_FORCE / ADMIN / GENERAL
+  ip_address  TEXT      Client IP that triggered the event
+  username    TEXT      Username associated with the event (if any)
+  timestamp   DATETIME  When the event occurred
+
+────────────────────────────────────────────────────────────────────────────
+TABLE: session_events
+────────────────────────────────────────────────────────────────────────────
+Stores session lifecycle events for the session hijacking demo timeline.
+
+  Column      Type      Description
+  ─────────────────────────────────────────────────────────────────────
+  id          INTEGER   Primary key
+  username    TEXT      Which user this event belongs to
+  event_type  TEXT      LOGIN / LOGOUT / SESSION_VIEW /
+                        SESSION_VIEW_INSECURE
+  ip_address  TEXT      IP at time of event
+  detail      TEXT      Free text detail about the event
+  timestamp   DATETIME  When the event occurred
+
+────────────────────────────────────────────────────────────────────────────
+TABLE: api_tokens
+────────────────────────────────────────────────────────────────────────────
+Stores issued API tokens for the JWT lab.
+
+  Column      Type      Description
+  ─────────────────────────────────────────────────────────────────────
+  id          INTEGER   Primary key
+  user_id     INTEGER   Foreign key to users.id
+  token       TEXT      The issued token (unique)
+  created_at  DATETIME  Issue timestamp
+  expires_at  DATETIME  Expiry timestamp
+  last_used   DATETIME  Most recent use of this token
+
+────────────────────────────────────────────────────────────────────────────
+TABLE: csrf_log
+────────────────────────────────────────────────────────────────────────────
+Tracks CSRF blocking events for the SecOps anomaly feed.
+
+  Column      Type      Description
+  ─────────────────────────────────────────────────────────────────────
+  id          INTEGER   Primary key
+  ip_address  TEXT      IP that sent the forged request
+  endpoint    TEXT      Which route was targeted
+  blocked     INTEGER   1 = blocked, 0 = allowed (insecure mode)
+  timestamp   DATETIME  When the event occurred
+
+────────────────────────────────────────────────────────────────────────────
+Key Design Decisions
+────────────────────────────────────────────────────────────────────────────
+  - Raw sqlite3 is used throughout (no Flask-SQLAlchemy or other ORM)
+  - get_db() opens a connection per request and closes it via
+    @app.teardown_appcontext — no persistent connection pool needed
+  - All queries use ? placeholders — no string concatenation in the
+    application's own queries (the insecure sqli_demo deliberately
+    breaks this rule to demonstrate the vulnerability)
+  - bcrypt salt is embedded in the hash string itself — no separate salt
+    column is needed
+
+
+════════════════════════════════════════════════════════════════════════════════
+8. API REFERENCE
+════════════════════════════════════════════════════════════════════════════════
+
+The following JSON API endpoints are available (all require a logged-in
+session except where noted):
+
+  Endpoint              Method  Description
+  ─────────────────────────────────────────────────────────────────────
+  /api/logs             GET     Last 50 security log entries (JSON).
+                                Optional query params: limit=N,
+                                category=AUTH|CSRF|etc.
+  /api/anomalies        GET     Current anomaly data: suspicious IPs,
+                                targeted accounts, locked accounts
+  /api/security-score   GET     Current security score with breakdown
+  /api/stats            GET     Aggregate stats: user count, log count,
+                                danger event count, score, anomalies
+  /api/token            POST    Issue a JWT (secure) or weak token
+                                (insecure). Admin-only in secure mode.
+  /api/protected        GET     Token-protected endpoint for the JWT
+                                demo. Validates Bearer token.
+  /api/brute-force      POST    Simulated brute-force attack.
+                                Body: {"target": "username"}
+                                Runs six common passwords against target.
+  /api/crypto           POST    Interactive crypto operations.
+                                Body: {"op": "...", "text": "...",
+                                       "shift": N}
+                                Ops: base64_encode, base64_decode,
+                                caesar, hash_md5, hash_sha256, strength
+
+
+════════════════════════════════════════════════════════════════════════════════
+9. WORKFLOW & USER JOURNEY
+════════════════════════════════════════════════════════════════════════════════
+
+9.1 First-Time User Journey
+----------------------------
+  1. User opens the app → redirected to /login
+  2. Animated loading screen plays (HVS logo + progress bar)
+  3. Login page appears in SECURE mode (default at first login)
+  4. User logs in with admin / admin123
+  5. SOC Dashboard loads — security score is high (secure mode active),
+     no threats yet
+  6. User reads the permission list showing full admin access
+  7. User clicks "Missions" → Mission Select page shows all 8 levels
+     marked PATCHED (because currently in secure mode)
+
+9.2 Exploring Attack Mode
+--------------------------
+  1. User clicks "SWITCH INSECURE" in the nav bar
+  2. Badge changes to COMPROMISED (red skull), all 8 level cards change
+     to VULNERABLE
+  3. User clicks Level 6 (SQL Injection)
+  4. User types: ' OR '1'='1 into the username field and submits
+  5. The page shows the raw SQL that ran, all user rows returned, and
+     the flow steps highlighting the injection point
+  6. Security score on the dashboard has dropped (danger events logged)
+
+9.3 Exploring Secure Mode
+--------------------------
+  1. User clicks "SWITCH SECURE" — mode restores to secure
+  2. If the role cookie was tampered, the escalation banner appears
+  3. User returns to Level 6 and tries the same injection
+  4. Zero rows returned, flow steps show the parameterized query blocked it
+  5. User visits the Crypto Lab — types admin123 and sees all five hashes,
+     the rainbow table hit banner, and the password strength score
+
+9.4 Admin and SecOps Journey
+------------------------------
+  1. Admin visits /admin — sees all user accounts, changes a user's role
+  2. Admin or Moderator visits /security-dashboard — sees anomaly data,
+     all warning/danger logs, event category breakdown
+  3. Admin uses the API Lab to generate a JWT, copies it, and tests it
+     against /api/protected — sees role and permission claims in the response
+
+9.5 Burp Suite Integration
+---------------------------
+The Missions page includes a Burp Suite callout panel explaining which
+parameters can be modified mid-request in attack mode:
+  role, amount, session, comment, username, csrf_token, Authorization
+
+To use Burp Suite:
+  - Configure the browser to proxy through 127.0.0.1:8080
+  - Set Burp Suite as the intercepting proxy
+  - Navigate to any level in attack mode
+  - Intercept the POST request, modify the target parameter, and forward
+  - The page will process the modified value and show the result
+
+This lets technically advanced users go beyond the built-in simulators
+and perform the attacks manually at the HTTP level.
+
+
+════════════════════════════════════════════════════════════════════════════════
+10. DEFAULT CREDENTIALS & ACCESS
+════════════════════════════════════════════════════════════════════════════════
+
+Three accounts are created automatically when the database is first
+initialised. All passwords are stored as bcrypt hashes.
+
+  Username    Password    Role        Access Level
+  ────────────────────────────────────────────────────────────────────────
+  admin       admin123    admin       Full access: all pages, user
+                                      management, API tokens, admin panel
+  moderator   mod123      moderator   Dashboard, all missions, security
+                                      dashboard, logs — no admin panel
+  demo        demo123     user        Dashboard and all missions only
+
+Route Access by Role:
+
+  Route                   guest  user  moderator  admin
+  ─────────────────────────────────────────────────────────────
+  /login, /register       yes    yes   yes        yes
+  /dashboard              no     yes   yes        yes
+  /levels                 no     yes   yes        yes
+  All /exploit/* routes   no     yes   yes        yes
+  /crypto-lab             no     no    no         yes
+  /api-lab                no     yes   yes        yes
+  /security-dashboard     no     no    yes        yes
+  /admin                  no     no    no         yes
+
+Note: in insecure mode, the role check reads the browser cookie — any of
+these restrictions can be bypassed by editing the cookie to a higher role.
+This is the intended behaviour for the Level 2 demonstration.
+
+
+════════════════════════════════════════════════════════════════════════════════
+11. USER INTERFACE & DESIGN
+════════════════════════════════════════════════════════════════════════════════
+
+11.1 Visual Theme
+------------------
+The entire application uses a dark cyberpunk/hacker aesthetic:
+
+  Background:   #0a0a0f (near-black with slight blue tint)
+  Primary text: #c0c0c0 (light grey — easy to read on dark)
+  Accent green: #00ff88 (neon green — success, secure mode, highlights)
+  Accent red:   #ff2244 (bright red — danger, attacks, insecure mode)
+  Accent blue:  #00aaff (cyan-blue — info, links, secondary highlights)
+  Accent yellow:#ffaa00 (amber — warnings, moderate states)
+
+  Font: monospace throughout (Courier New, Consolas, system mono)
+
+All components follow this palette — no colour is introduced outside of it.
+
+11.2 Key UI Components
+-----------------------
+Loading Screen: on every page load, a full-screen overlay shows the HVS
+logo with a glitch effect and a progress bar filling from left to right.
+The overlay fades out after ~1.4 seconds revealing the page.
+
+Matrix Rain: on the login and register pages, a canvas-based matrix rain
+animation fills the background before the loading screen clears.
+
+Glitch Effect: the main "HACKER VS SYSTEM" title on the login page uses
+a CSS animation that briefly duplicates and offsets the text in red and
+green, simulating a screen glitch.
+
+Scanline Overlay: a subtle CSS div with repeating linear-gradient sits
+over the entire page to simulate the look of an old CRT monitor.
+
+Flow Steps: every exploit demo page shows a list of numbered steps, each
+with a status indicator (info, success, warning, danger) that lights up
+based on the result of the current action.
+
+Learn More Panels: every exploit page has a collapsible panel with a
+graduation cap icon. Clicking it toggles the panel open or closed using
+the global toggleLearn() JavaScript function.
+
+Security Score Circle: an SVG circle with a stroke-dasharray animation
+that fills proportionally to the current score, colour-coded by risk level.
+
+Mode Badge: a small pill in the nav bar showing SECURE (green, shield icon)
+or COMPROMISED (red, skull icon). Changes instantly on mode toggle.
+
+11.3 Navigation Bar
+--------------------
+The nav bar appears on every authenticated page and contains:
+  [HVS] logo → links to dashboard
+  Mode badge (SECURE / COMPROMISED)
+  Username + role tag
+  SOC → dashboard
+  Missions → levels
+  Crypto → crypto lab
+  API → api lab
+  SecOps → security dashboard (moderator/admin only)
+  Admin → admin panel (admin only)
+  Mode toggle button
+  Logout button
+
+
+════════════════════════════════════════════════════════════════════════════════
+12. SECURITY FEATURES & IMPLEMENTATIONS
+════════════════════════════════════════════════════════════════════════════════
+
+This section summarises every security mechanism implemented in the platform
+and explains the technical detail behind each one.
+
+bcrypt Password Hashing
+  All passwords — including default seeded passwords — are hashed with
+  bcrypt using a random salt and cost factor 10. bcrypt is intentionally
+  slow (takes ~100ms per hash) making brute-force attacks impractical.
+  The salt is stored inside the hash string itself ($2b$10$...) so no
+  separate column is needed. bcrypt.checkpw() is used for verification.
+
+Account Lockout
+  After 3 consecutive failed logins, locked_until is set to 15 minutes
+  in the future. All login attempts on a locked account are rejected
+  regardless of the password. The lockout auto-expires — the next
+  correct login after the lockout period succeeds and resets the counter.
+
+CSRF Token Protection
+  On session creation, a 32-byte random hex token is generated with
+  secrets.token_hex(32) and stored in the session. Every HTML form in
+  secure mode includes this token in a hidden field. On POST, the server
+  compares the form token to the session token. Mismatch = reject and log.
+
+Session IP Binding
+  On successful login in secure mode, the client IP is stored in
+  session['bound_ip']. Every request to /dashboard checks the current IP
+  against the bound IP. A mismatch clears the session and forces re-login.
+  This prevents session token theft from a different network location.
+
+Secure Cookie Flags
+  In secure mode, the session_demo route sets a demo_secure cookie with:
+  HttpOnly=True   — JavaScript cannot read the cookie (prevents XSS theft)
+  SameSite=Strict — cookie is not sent on cross-origin requests (prevents CSRF)
+  max_age=300     — expires in 5 minutes
+
+Parameterized SQL Queries
+  All application queries use ? placeholders. The sqli_demo is the only
+  deliberate exception — it uses string concatenation to show the attack.
+
+HTML Output Escaping
+  html.escape() is applied to all user-generated content before rendering
+  in secure mode. Jinja2 auto-escaping is also active for all templates
+  except where |safe is deliberately used in the XSS demo.
+
+JWT Signing and Verification
+  Tokens are signed with HMAC-SHA256 (algorithm HS256) using a secret key
+  from the environment. Every call to /api/protected decodes and verifies
+  the signature. Expired tokens raise jwt.ExpiredSignatureError. Tampered
+  tokens raise jwt.InvalidTokenError. Both return 401.
+
+Input Sanitization
+  The sanitize_input() function applies html.escape() to any string before
+  it is reflected in a response. This is used in the parameter tamper and
+  XSS demos to show the cleaned output.
+
+Privilege Escalation Detection
+  toggle_mode() compares session['role'] to the database role when switching
+  from insecure to secure. A mismatch triggers a DANGER log, restores the
+  correct role, and sets escalation_detected in the session.
+
+Audit Logging
+  add_log() is called for every significant event. Log entries include the
+  level (SUCCESS / INFO / WARNING / DANGER), category, message, IP address,
+  and username. Logs are queryable via /api/logs with category filtering.
+
+
+════════════════════════════════════════════════════════════════════════════════
+13. EDUCATIONAL VALUE & LEARNING OUTCOMES
+════════════════════════════════════════════════════════════════════════════════
+
+13.1 What Users Learn
+----------------------
+After working through the full platform, a user will have directly
+experienced and understood the following:
+
+Authentication Security
+  - Why plain text password comparison is dangerous
+  - How bcrypt hashing works and why it is preferred over MD5 or SHA-256
+    for passwords
+  - What a brute-force attack looks like step by step
+  - How account lockout stops brute-force attacks in practice
+  - What a CSRF attack on a login form looks like
+
+Access Control
+  - What "broken access control" means in practice
+  - How simply editing a browser cookie can grant admin access on an
+    insecure system
+  - How server-side role verification closes this gap completely
+  - What a permission matrix looks like and how roles map to permissions
+
+Session Security
+  - What a session cookie is and how it identifies a user to the server
+  - Why HttpOnly prevents JavaScript from stealing a session cookie
+  - Why SameSite prevents cookies from being sent on cross-origin requests
+  - What session fixation and replay attacks are
+
+Injection Attacks
+  - How XSS works — why unsanitized output renders attacker code
+  - How to neutralize XSS with output encoding
+  - How SQL injection works — why string concatenation enables it
+  - How parameterized queries prevent SQL injection entirely
+
+Web Application Attacks
+  - What CSRF is and why browsers cannot distinguish legitimate requests
+    from forged ones without a server-generated token
+  - How a CSRF token breaks the attack
+
+API Security
+  - What a JWT is and what its three parts contain
+  - Why an unsigned or unverified token can be forged
+  - How signature verification makes JWTs trustworthy
+  - What token expiry does and why it matters
+
+Cryptography
+  - The difference between hashing and encryption
+  - Why MD5 and SHA-1 are no longer suitable for password storage
+  - What a salt does and why it defeats rainbow table attacks
+  - How bcrypt's cost factor makes cracking impractical
+  - What a Caesar cipher is and why it is trivially breakable
+  - What Base64 is and why it is not a security measure
+  - How a JWT uses HMAC-SHA256 as a digital signature
+
+13.2 Learning Design Principles
+--------------------------------
+Every page follows the same educational structure:
+  1. Show the vulnerable state — let the user perform the attack and see
+     the real result
+  2. Show the flow — break down exactly what happened at each step
+  3. Show the fix — switch to secure mode and perform the same action;
+     the attack fails
+  4. Explain why — the Learn More panel provides the theory behind both
+     the attack and the defence
+
+This attack-then-defend structure creates a much stronger learning
+impression than theory alone because users feel the impact of the
+vulnerability before they understand the fix. Seeing their own injection
+string dump the user table makes the SQL injection lesson memorable in a
+way no diagram can replicate.
+
+13.3 Burp Suite Extension
+--------------------------
+For users who want to go beyond the built-in simulations, the Missions
+page includes a callout explaining exactly which parameters to intercept
+and modify for each level. This bridges the gap between the guided demos
+and real penetration testing practice.
+
+
+════════════════════════════════════════════════════════════════════════════════
+14. CONCLUSION
+════════════════════════════════════════════════════════════════════════════════
+
+Hacker vs System successfully combines web development, cryptography, and
+ethical hacking into a single self-contained educational platform. The
+project delivers on every objective set out in the proposal:
+
+  Objective 1 — Web application with authentication, RBAC, restricted pages
+  Status: Complete. Full login/registration system with four roles, ten
+  permissions, server-side enforcement, and admin/moderator-restricted pages.
+
+  Objective 2 — Demonstrate common vulnerabilities
+  Status: Exceeded. Eight vulnerabilities are demonstrated instead of the
+  four originally planned: login bypass, role escalation, data tampering,
+  session hijacking, XSS, SQL injection, CSRF, and API/JWT security.
+
+  Objective 3 — Attack simulations
+  Status: Complete. Every level has a working live exploit in attack mode,
+  a brute-force simulator is built into the login page, and all attacks
+  are documented for use with Burp Suite.
+
+  Objective 4 — Secure solutions
+  Status: Complete. Every vulnerability has a corresponding secure
+  implementation that can be activated instantly via the mode toggle.
+
+  Objective 5 — Cryptographic concepts
+  Status: Complete. The Crypto Lab covers SHA-256, SHA-512, MD5, SHA-1,
+  bcrypt, rainbow tables, password strength, Caesar cipher, Base64, and
+  JWT structure — all interactive, all in-browser.
+
+The platform goes beyond the original proposal in several ways:
+  - A live security score provides a quantified measure of system health
+  - Full audit logging captures every action as a security event
+  - A dedicated SecOps dashboard provides anomaly detection and threat feeds
+  - Eight levels instead of four
+  - Step-by-step flow visualizations on every exploit page
+  - No external tools required — CrypTool and KeePass functionality is
+    built directly into the Crypto Lab
+
+The result is a platform that teaches web security not through passive
+reading but through active exploitation and defence — making every concept
+concrete, immediate, and memorable.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+END OF REPORT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

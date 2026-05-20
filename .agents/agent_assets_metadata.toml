@@ -6,3 +6,9 @@ id = "ioNRxC6-ayzkO7brHA0A1"
 uri = "file://attached_assets/Project_Proposal_Final_Fixed.txt"
 type = "text"
 title = "Hacker vs System – Final Fixed Proposal"
+
+[[outputs]]
+id = "PO_VYaU-o5i_EjTIMoEf7"
+uri = "file://attached_assets/Hacker_vs_System_Project_Report.txt"
+type = "text"
+title = "Hacker vs System — Full Project Report"
